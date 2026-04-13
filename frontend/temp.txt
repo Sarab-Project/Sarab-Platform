@@ -1,0 +1,2 @@
+in this folder put your frontend project 
+=> you can delete this fucking file after you see folder -_-
