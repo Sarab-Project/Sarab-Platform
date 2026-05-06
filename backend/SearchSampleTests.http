@@ -1,0 +1,116 @@
+### Search Sample API Tests
+### Base URL: http://localhost:5000/api/samples
+
+### Test 1: Search with pagination only
+POST http://localhost:5027/api/samples/search
+Content-Type: application/json
+
+{
+  "page": 1,
+  "pageSize": 10
+}
+
+### Test 2: Search by gender and age range
+POST http://localhost:5027/api/samples/search
+Content-Type: application/json
+
+{
+  "gender": "Male",
+  "minAge": 25,
+  "maxAge": 50,
+  "page": 1,
+  "pageSize": 10
+}
+
+### Test 3: Search by keyword
+POST http://localhost:5027/api/samples/search
+Content-Type: application/json
+
+{
+  "keyword": "sample",
+  "page": 1,
+  "pageSize": 15
+}
+
+### Test 4: Search by city and status
+POST http://localhost:5027/api/samples/search
+Content-Type: application/json
+
+{
+  "city": "Homs",
+  "status": "single",
+  "page": 1,
+  "pageSize": 10
+}
+
+### Test 5: Search by tags
+POST http://localhost:5027/api/samples/search
+Content-Type: application/json
+
+{
+  "tagIds": [1],
+  "page": 1,
+  "pageSize": 10
+}
+
+### Test 6: Advanced search with all filters
+POST http://localhost:5027/api/samples/search
+Content-Type: application/json
+
+{
+  "gender": "Female",
+  "minAge": 30,
+  "maxAge": 45,
+  "city": "damascus",
+  "status": "single",
+  //"keyword": "eye",
+  //"tagIds": [1, 4],
+  "page": 1,
+  "pageSize": 20
+}
+
+### Test 7: Navigate to page 2
+POST http://localhost:5027/api/samples/search
+Content-Type: application/json
+
+{
+  "keyword": "sample",
+  "page": 2,
+  "pageSize": 10
+}
+
+### Test 8: Custom page size
+POST http://localhost:5027/api/samples/search
+Content-Type: application/json
+
+{
+  "page": 1,
+  "pageSize": 50
+}
+
+### Test 9: INVALID - Page must be >= 1 (should return 400)
+POST http://localhost:5027/api/samples/search
+Content-Type: application/json
+
+{
+  "page": 0,
+  "pageSize": 10
+}
+
+### Test 10: INVALID - PageSize must be <= 100 (should return 400)
+POST http://localhost:5027/api/samples/search
+Content-Type: application/json
+
+{
+  "page": 1,
+  "pageSize": 200
+}
+
+### Test 11: Empty search (all samples)
+POST http://localhost:5027/api/samples/search
+Content-Type: application/json
+
+{
+  "page": 1,
+  "pageSize": 10
+}
