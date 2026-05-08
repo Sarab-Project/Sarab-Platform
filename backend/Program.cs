@@ -20,6 +20,7 @@ builder.Services.Configure<FormOptions>(options =>
 
 builder.Services.AddHttpClient(); 
 builder.Services.AddScoped<FileService>();
+builder.Services.AddScoped<AudioService>();
 builder.Services.AddDbContext<AppDbContext>(options => 
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"))
 );
@@ -48,6 +49,7 @@ if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 
+app.UseRouting();
 app.UseCors("AllowAll");
 app.MapControllers();
 app.UseSwagger();
