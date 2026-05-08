@@ -68,10 +68,10 @@ namespace SarabPlatform.Controllers
                 EyeSide = dto.EyeSide,
                 Gender = dto.Gender,
                 Age = dto.Age,
-                city = dto.City,
+                City = dto.City,
                 Status = dto.Status,
-                profession = dto.Profession,
-                notes = dto.Notes
+                Profession = dto.Profession,
+                Notes = dto.Notes
             };
             var metadataJson = JsonSerializer.Serialize(metadataObject);
 
