@@ -1,0 +1,2032 @@
+================================================================================
+                      SARAB PLATFORM - API DOCUMENTATION
+                    For Frontend Development Integration
+================================================================================
+
+VERSION: 1.0
+DATE: May 7, 2026
+BACKEND BASE URL: http://localhost:5000
+ALTERNATIVE DEVELOPMENT URL: http://localhost:5001
+
+================================================================================
+                     SECTION 1: AUTHORIZATION ARCHITECTURE
+================================================================================
+
+The Sarab Platform uses JWT (JSON Web Token) based authentication with a refresh
+token mechanism for secure, stateless authentication.
+
+AUTHORIZATION FLOW:
+-------------------
+
+1. USER SIGNUP/LOGIN
+   └─ Receive: Access Token (JWT) + Refresh Token
+   └─ Access Token Expiry: 60 minutes
+   └─ Refresh Token Expiry: 30 days
+
+2. STORE TOKENS LOCALLY
+   └─ Access Token: Store in localStorage or memory (recommended: memory for security)
+   └─ Refresh Token: Store in localStorage with proper security (HttpOnly if possible)
+
+3. USE ACCESS TOKEN FOR REQUESTS
+   └─ Add to Authorization Header: "Bearer {accessToken}"
+   └─ All protected endpoints require this header
+
+4. TOKEN REFRESH
+   └─ When Access Token expires (60 min), use Refresh Token to get new Access Token
+   └─ Call: POST /api/auth/refresh with RefreshToken in body
+   └─ Continue using same Access Token until refresh is needed
+
+5. LOGOUT
+   └─ Call: POST /api/auth/logout
+   └─ Send Refresh Token in body to invalidate session
+   └─ Clear both tokens from local storage
+   └─ Redirect user to login page
+
+TOKEN CLAIMS (contained in Access Token):
+-----------------------------------------
+- sub: User ID
+- email: User Email
+- name: User First Name
+- nameid: User ID (duplicate for compatibility)
+- email (claim type): User Email
+- role: User Role (Admin, Contributor, Researcher)
+- iat: Issued At (timestamp)
+- exp: Expiration (timestamp)
+- iss: Issuer ("SarabPlatform")
+- aud: Audience ("SarabPlatformUsers")
+
+JWT STRUCTURE:
+--------------
+{
+  "Header": {
+    "alg": "HS256",
+    "typ": "JWT"
+  },
+  "Payload": {
+    "sub": "1",
+    "email": "user@example.com",
+    "name": "John",
+    "role": "Researcher",
+    "exp": 1234567890,
+    "iss": "SarabPlatform",
+    "aud": "SarabPlatformUsers"
+  },
+  "Signature": "HMACSHA256(base64UrlEncode(header) + '.' + base64UrlEncode(payload), secret)"
+}
+
+AUTHORIZATION MIDDLEWARE CONFIGURATION:
+----------------------------------------
+- Scheme: Bearer
+- Key: ChangeThisToASecretKeyWithAtLeast32Chars!
+- Issuer: SarabPlatform
+- Audience: SarabPlatformUsers
+- Token Validation: Checks signature, expiry, issuer, and audience
+
+
+================================================================================
+                     SECTION 2: HTTP REQUEST HEADERS
+================================================================================
+
+REQUIRED HEADERS FOR ALL REQUESTS:
+----------------------------------
+
+Content-Type:
+  "application/json" (for JSON requests)
+  "multipart/form-data" (for file uploads)
+
+Authorization (For Protected Endpoints):
+  "Bearer {accessToken}"
+  Example: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+OPTIONAL HEADERS:
+-----------------
+
+User-Agent: 
+  Automatically sent by browser, used by server for session tracking
+
+Accept:
+  "application/json"
+
+CORS POLICY:
+-----------
+The backend allows:
+- All Origins (*)
+- All Methods (GET, POST, PUT, DELETE, OPTIONS, etc.)
+- All Headers
+
+
+================================================================================
+                     SECTION 3: API ENDPOINTS
+================================================================================
+
+PREFIX: /api
+
+---[ AUTHENTICATION ENDPOINTS ]---
+Route Prefix: /api/auth
+All endpoints in this section are [AllowAnonymous]
+
+1. SIGNUP (User Registration)
+   ────────────────────────────
+   Endpoint: POST /api/auth/signup
+   Access: Public (No Authorization Required)
+   Description: Register a new user account
+
+   Request Headers:
+   - Content-Type: application/json
+
+   Request Body:
+   {
+     "firstName": "John",
+     "lastName": "Doe",
+     "email": "john.doe@example.com",
+     "password": "SecurePassword123"
+   }
+
+   Request Validation:
+   - firstName: Required, minimum 3 characters
+   - lastName: Optional
+   - email: Required, valid email format
+   - password: Required, minimum 8 characters
+
+   Success Response (200 OK):
+   {
+     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNjk5NDcyNDAwLCJpc3MiOiJTYXJhYlBsYXRmb3JtIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
+     "refreshToken": "rO0JayJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9eyJzdWIiOiIxIn0",
+     "expiresAt": "2026-05-07T14:00:00Z",
+     "user": {
+       "id": 1,
+       "firstName": "John",
+       "lastName": "Doe",
+       "email": "john.doe@example.com",
+       "profileImagePath": null
+     }
+   }
+
+   Error Response (409 Conflict):
+   {
+     "message": "Email is already registered."
+   }
+
+   Error Response (400 Bad Request):
+   {
+     "errors": {
+       "password": ["The Password field is required."],
+       "email": ["The Email field is not a valid e-mail address."]
+     }
+   }
+
+   Frontend Implementation:
+   - Store token and refreshToken securely
+   - Store user info in state/context
+   - Redirect to dashboard/home page
+   - Set up automatic token refresh mechanism
+
+---
+
+2. LOGIN (User Authentication)
+   ────────────────────────────
+   Endpoint: POST /api/auth/login
+   Access: Public (No Authorization Required)
+   Description: Authenticate user and receive tokens
+
+   Request Headers:
+   - Content-Type: application/json
+
+   Request Body:
+   {
+     "email": "john.doe@example.com",
+     "password": "SecurePassword123"
+   }
+
+   Request Validation:
+   - email: Required, valid email format
+   - password: Required
+
+   Success Response (200 OK):
+   {
+     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNjk5NDcyNDAwLCJpc3MiOiJTYXJhYlBsYXRmb3JtIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c",
+     "refreshToken": "rO0JayJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9eyJzdWIiOiIxIn0",
+     "expiresAt": "2026-05-07T14:00:00Z",
+     "user": {
+       "id": 1,
+       "firstName": "John",
+       "lastName": "Doe",
+       "email": "john.doe@example.com",
+       "profileImagePath": null
+     }
+   }
+
+   Error Response (401 Unauthorized):
+   {
+     "message": "Invalid credentials."
+   }
+
+   Error Response (400 Bad Request):
+   {
+     "errors": {
+       "email": ["The Email field is not a valid e-mail address."]
+     }
+   }
+
+   Frontend Implementation:
+   - Validate inputs before sending
+   - Store tokens in memory/localStorage
+   - Save user context
+   - Redirect to dashboard
+   - Show appropriate error messages
+
+---
+
+3. REFRESH TOKEN (Get New Access Token)
+   ────────────────────────────────────
+   Endpoint: POST /api/auth/refresh
+   Access: Public (No Authorization Required)
+   Description: Obtain a new access token using refresh token
+
+   Request Headers:
+   - Content-Type: application/json
+
+   Request Body:
+   {
+     "refreshToken": "rO0JayJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9eyJzdWIiOiIxIn0"
+   }
+
+   Success Response (200 OK):
+   {
+     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNjk5NDcyNDAwLCJpc3MiOiJTYXJhYlBsYXRmb3JtIn0.NEW_TOKEN_HERE",
+     "refreshToken": "rO0JayJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9NEW_REFRESH_TOKEN",
+     "expiresAt": "2026-05-07T15:00:00Z",
+     "user": {
+       "id": 1,
+       "firstName": "John",
+       "lastName": "Doe",
+       "email": "john.doe@example.com",
+       "profileImagePath": null
+     }
+   }
+
+   Error Response (401 Unauthorized):
+   {
+     "message": "Refresh token is invalid or expired."
+   }
+
+   Frontend Implementation:
+   - Call this endpoint before access token expires (around 50-55 min mark)
+   - OR call when receiving 401 error from protected endpoint
+   - Update tokens in storage
+   - Retry the original failed request
+   - If refresh also fails, redirect to login
+
+---
+
+4. LOGOUT (Invalidate Session)
+   ───────────────────────────
+   Endpoint: POST /api/auth/logout
+   Access: Protected (Requires Authorization Header with Bearer Token)
+   Description: Logout user and revoke refresh token
+
+   Request Headers:
+   - Content-Type: application/json
+   - Authorization: Bearer {accessToken}
+
+   Request Body:
+   {
+     "refreshToken": "rO0JayJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9eyJzdWIiOiIxIn0"
+   }
+
+   Success Response (200 OK):
+   {
+     "message": "Logged out successfully."
+   }
+
+   Error Response (401 Unauthorized):
+   {
+     "message": "Unauthorized"
+   }
+
+   Error Response (404 Not Found):
+   {
+     "message": "Session not found."
+   }
+
+   Frontend Implementation:
+   - Clear stored tokens
+   - Clear user context/state
+   - Redirect to login page
+   - Show logout confirmation message
+
+
+---[ USERS ENDPOINTS ]---
+Route Prefix: /api/users
+
+1. GET ALL USERS
+   ──────────────
+   Endpoint: GET /api/users
+   Access: Public
+   Description: Retrieve list of all users
+
+   Request Headers:
+   - Authorization: Bearer {accessToken} (Optional)
+
+   Success Response (200 OK):
+   [
+     {
+       "id": 1,
+       "firstName": "John",
+       "lastName": "Doe",
+       "email": "john@example.com",
+       "role": 2,
+       "profileImagePath": "/profiles/user1.jpg",
+       "createdAt": "2026-05-01T10:30:00Z",
+       "isActive": true
+     },
+     {
+       "id": 2,
+       "firstName": "Jane",
+       "lastName": "Smith",
+       "email": "jane@example.com",
+       "role": 2,
+       "profileImagePath": null,
+       "createdAt": "2026-05-02T14:45:00Z",
+       "isActive": true
+     }
+   ]
+
+   Frontend Implementation:
+   - Display list of users
+   - Implement pagination if many users
+   - Show user profiles/cards
+
+---
+
+2. GET SINGLE USER
+   ────────────────
+   Endpoint: GET /api/users/{id}
+   Access: Public
+   Description: Retrieve a specific user by ID
+
+   URL Parameters:
+   - id: User ID (integer)
+
+   Example: GET /api/users/1
+
+   Success Response (200 OK):
+   {
+     "id": 1,
+     "firstName": "John",
+     "lastName": "Doe",
+     "email": "john@example.com",
+     "role": 2,
+     "profileImagePath": "/profiles/user1.jpg",
+     "createdAt": "2026-05-01T10:30:00Z",
+     "isActive": true
+   }
+
+   Error Response (404 Not Found):
+   (No body, just 404 status)
+
+   Error Response (500 Internal Server Error):
+   {
+     "message": "Internal server error",
+     "error": "Exception details"
+   }
+
+   Frontend Implementation:
+   - Display user profile
+   - Show user details in profile page
+   - Use for user lookup
+
+---
+
+3. UPDATE USER
+   ────────────
+   Endpoint: PUT /api/users/{id}
+   Access: Public (Note: Should be protected in production)
+   Description: Update user information
+
+   URL Parameters:
+   - id: User ID (integer)
+
+   Request Headers:
+   - Content-Type: application/json
+   - Authorization: Bearer {accessToken}
+
+   Request Body:
+   {
+     "firstName": "John",
+     "lastName": "Smith",
+     "email": "john.smith@example.com",
+     "password": "NewSecurePassword123",
+     "role": 2
+   }
+
+   All fields are optional - only send what needs updating
+
+   Success Response (200 OK):
+   {
+     "message": "User updated."
+   }
+
+   Error Response (404 Not Found):
+   (No body, just 404 status)
+
+   Frontend Implementation:
+   - Provide edit form for user profile
+   - Validate inputs before sending
+   - Show success/error message
+   - Update local user context
+
+---
+
+4. DELETE USER
+   ────────────
+   Endpoint: DELETE /api/users/{id}
+   Access: Public (Note: Should be protected in production)
+   Description: Delete a user account
+
+   URL Parameters:
+   - id: User ID (integer)
+
+   Request Headers:
+   - Authorization: Bearer {accessToken}
+
+   Example: DELETE /api/users/1
+
+   Success Response (204 No Content):
+   (Empty body)
+
+   Error Response (404 Not Found):
+   (No body, just 404 status)
+
+   Frontend Implementation:
+   - Add confirmation dialog before deletion
+   - Handle error cases
+   - Redirect to users list on success
+   - Show notification
+
+---
+
+5. DELETE USER DOCUMENT
+   ─────────────────────
+   Endpoint: DELETE /api/users/documents/{documentId}
+   Access: Protected (Requires Authorization Header)
+   Description: Soft delete a user document (mark as deleted)
+                Requires JWT token - only the document owner can delete
+
+   URL Parameters:
+   - documentId: Document ID (integer)
+
+   Request Headers:
+   - Authorization: Bearer {accessToken}
+
+   Example: DELETE /api/users/documents/5
+
+   Success Response (200 OK):
+   {
+     "message": "Document deleted successfully"
+   }
+
+   Error Response (401 Unauthorized):
+   {
+     "message": "Invalid user token"
+   }
+
+   Error Response (404 Not Found):
+   {
+     "message": "Document not found"
+   }
+
+   Error Response (400 Bad Request):
+   {
+     "message": "Document is already deleted"
+   }
+
+   Frontend Implementation:
+   - Extract userId from JWT token
+   - Implement soft delete UI
+   - Show confirmation before deletion
+   - Update document list after deletion
+
+---
+
+6. RESTORE USER DOCUMENT
+   ──────────────────────
+   Endpoint: POST /api/users/documents/{documentId}/restore
+   Access: Protected (Requires Authorization Header)
+   Description: Restore a previously deleted user document
+                Requires JWT token - only the document owner can restore
+
+   URL Parameters:
+   - documentId: Document ID (integer)
+
+   Request Headers:
+   - Authorization: Bearer {accessToken}
+   - Content-Type: application/json
+
+   Example: POST /api/users/documents/5/restore
+
+   Success Response (200 OK):
+   {
+     "message": "Document restored successfully"
+   }
+
+   Error Response (401 Unauthorized):
+   {
+     "message": "Invalid user token"
+   }
+
+   Error Response (404 Not Found):
+   {
+     "message": "Document not found"
+   }
+
+   Error Response (400 Bad Request):
+   {
+     "message": "Document is not deleted"
+   }
+
+   Frontend Implementation:
+   - Show restore option in deleted items section
+   - Refresh document list after restore
+   - Provide undo functionality for recently deleted items
+
+---
+
+7. REVIEW USER DOCUMENT (Admin Only)
+   ─────────────────────────────────
+   Endpoint: PUT /api/users/documents/{documentId}/review
+   Access: Protected (Requires Admin role in JWT token)
+   Description: Review and approve/reject a user document
+                Only admins can perform this action
+
+   URL Parameters:
+   - documentId: Document ID (integer)
+
+   Request Headers:
+   - Authorization: Bearer {accessToken}
+   - Content-Type: application/json
+
+   Request Body:
+   {
+     "status": 0,
+     "rejectionReason": "Document quality is insufficient"
+   }
+
+   Status Values:
+   - 0: Pending
+   - 1: Approved
+   - 2: Rejected
+   - (Check DocumentStatus enum for exact values)
+
+   RejectionReason: Optional, required if status is Rejected
+
+   Example Request:
+   {
+     "status": 1,
+     "rejectionReason": null
+   }
+
+   Success Response (200 OK):
+   {
+     "message": "Document reviewed successfully"
+   }
+
+   Error Response (401 Unauthorized):
+   {
+     "message": "Invalid user token" or "Unauthorized"
+   }
+
+   Error Response (403 Forbidden):
+   (If user is not admin - implicit in token validation)
+
+   Error Response (404 Not Found):
+   {
+     "message": "Document not found"
+   }
+
+   Error Response (400 Bad Request):
+   {
+     "message": "Cannot review a deleted document"
+   }
+
+   Frontend Implementation:
+   - Admin dashboard component
+   - Document review interface
+   - Approve/Reject buttons
+   - Reason text field
+   - Show review status updates
+
+
+---[ GROUPS ENDPOINTS ]---
+Route Prefix: /api/groups
+
+1. GET ALL GROUPS
+   ───────────────
+   Endpoint: GET /api/groups
+   Access: Public
+   Description: Retrieve all groups (non-deleted)
+
+   Request Headers:
+   - Authorization: Bearer {accessToken} (Optional)
+
+   Success Response (200 OK):
+   [
+     {
+       "id": 1,
+       "name": "Research Team A",
+       "description": "Group for eye disease research",
+       "createdBy": 1,
+       "createdAt": "2026-05-01T10:00:00Z",
+       "members": [
+         {
+           "role": 0,
+           "joinedAt": "2026-05-01T10:00:00Z",
+           "user": {
+             "id": 1,
+             "firstName": "John",
+             "lastName": "Doe",
+             "email": "john@example.com",
+             "profileImagePath": null
+           }
+         }
+       ]
+     },
+     {
+       "id": 2,
+       "name": "Admin Group",
+       "description": "Administration group",
+       "createdBy": 2,
+       "createdAt": "2026-05-02T14:30:00Z",
+       "members": [
+         {
+           "role": 0,
+           "joinedAt": "2026-05-02T14:30:00Z",
+           "user": {
+             "id": 2,
+             "firstName": "Jane",
+             "lastName": "Smith",
+             "email": "jane@example.com",
+             "profileImagePath": null
+           }
+         }
+       ]
+     }
+   ]
+
+   Frontend Implementation:
+   - Display list of groups
+   - Show member count
+   - Implement search/filter
+   - Link to group details
+
+---
+
+2. GET SINGLE GROUP
+   ─────────────────
+   Endpoint: GET /api/groups/{id}
+   Access: Public
+   Description: Retrieve a specific group with all members
+
+   URL Parameters:
+   - id: Group ID (integer)
+
+   Example: GET /api/groups/1
+
+   Success Response (200 OK):
+   {
+     "id": 1,
+     "name": "Research Team A",
+     "description": "Group for eye disease research",
+     "createdBy": 1,
+     "createdAt": "2026-05-01T10:00:00Z",
+     "members": [
+       {
+         "role": 0,
+         "joinedAt": "2026-05-01T10:00:00Z",
+         "user": {
+           "id": 1,
+           "firstName": "John",
+           "lastName": "Doe",
+           "email": "john@example.com",
+           "profileImagePath": null
+         }
+       },
+       {
+         "role": 2,
+         "joinedAt": "2026-05-03T09:15:00Z",
+         "user": {
+           "id": 3,
+           "firstName": "Ali",
+           "lastName": "Hassan",
+           "email": "ali@example.com",
+           "profileImagePath": null
+         }
+       }
+     ]
+   }
+
+   Error Response (404 Not Found):
+   (No body, just 404 status)
+
+   Frontend Implementation:
+   - Display group details page
+   - List group members with roles
+   - Show member profiles
+   - Implement member management UI
+
+---
+
+3. CREATE GROUP
+   ─────────────
+   Endpoint: POST /api/groups
+   Access: Public
+   Description: Create a new group
+
+   Request Headers:
+   - Content-Type: application/json
+   - Authorization: Bearer {accessToken}
+
+   Request Body:
+   {
+     "name": "Research Team A",
+     "description": "Group for eye disease research",
+     "createdBy": 1
+   }
+
+   Field Validation:
+   - name: Required, minimum 3 characters
+   - description: Optional
+   - createdBy: Required, must be valid user ID
+
+   Success Response (201 Created):
+   {
+     "id": 1,
+     "name": "Research Team A",
+     "description": "Group for eye disease research",
+     "createdBy": 1,
+     "createdAt": "2026-05-01T10:00:00Z",
+     "isDeleted": false,
+     "deletedAt": "0001-01-01T00:00:00Z",
+     "members": null
+   }
+
+   Error Response (400 Bad Request):
+   {
+     "errors": {
+       "name": ["The field Name must be a string with a minimum length of 3 and maximum length of infinity."]
+     }
+   }
+
+   Frontend Implementation:
+   - Create group form
+   - Validate inputs
+   - Get current user ID from JWT token
+   - Show success/error messages
+   - Redirect to group page on success
+
+---
+
+4. CHANGE MEMBER ROLE
+   ───────────────────
+   Endpoint: PUT /api/groups/{groupId}/members/{userId}
+   Access: Protected (Requires Authorization Header)
+             Only group owner can change member roles
+   Description: Change a member's role within the group
+
+   URL Parameters:
+   - groupId: Group ID (integer)
+   - userId: User ID (integer)
+
+   Request Headers:
+   - Authorization: Bearer {accessToken}
+   - Content-Type: application/json
+
+   Request Body:
+   {
+     "newRole": 2
+   }
+
+   Role Values:
+   - 0: Owner
+   - 1: Contributor
+   - 2: Researcher
+   - 3: Guest
+
+   Example: PUT /api/groups/1/members/3
+   {
+     "newRole": 1
+   }
+
+   Success Response (200 OK):
+   {
+     "message": "Member role updated successfully."
+   }
+
+   Error Response (401 Unauthorized):
+   {
+     "message": "Invalid user token" or "Only the group owner can change member roles."
+   }
+
+   Error Response (404 Not Found):
+   {
+     "message": "Group not found." or "Member not found."
+   }
+
+   Frontend Implementation:
+   - Admin/owner panel in group settings
+   - Role dropdown/select for each member
+   - Confirmation before changing role
+   - Show success notification
+   - Refresh member list
+
+---
+
+5. REMOVE MEMBER
+   ──────────────
+   Endpoint: DELETE /api/groups/{groupId}/members/{userId}
+   Access: Protected (Requires Authorization Header)
+             Only group owner can remove members
+   Description: Remove a member from the group
+
+   URL Parameters:
+   - groupId: Group ID (integer)
+   - userId: User ID (integer)
+
+   Request Headers:
+   - Authorization: Bearer {accessToken}
+
+   Example: DELETE /api/groups/1/members/3
+
+   Success Response (200 OK):
+   {
+     "message": "Member removed successfully."
+   }
+
+   Error Response (401 Unauthorized):
+   {
+     "message": "Invalid user token" or "Only the group owner can remove members."
+   }
+
+   Error Response (404 Not Found):
+   {
+     "message": "Group not found." or "Membership not found."
+   }
+
+   Frontend Implementation:
+   - Remove button in member list
+   - Confirmation dialog
+   - Show success/error message
+   - Refresh member list
+   - Option to re-add later
+
+
+---[ SAMPLES ENDPOINTS ]---
+Route Prefix: /api/samples
+
+1. GET ALL SAMPLES
+   ────────────────
+   Endpoint: GET /api/samples
+   Access: Public
+   Description: Retrieve all active samples
+
+   Request Headers:
+   - Authorization: Bearer {accessToken} (Optional)
+
+   Success Response (200 OK):
+   [
+     {
+       "id": 1,
+       "title": "Sample A",
+       "description": "Eye sample A001",
+       "metadata": "{\"eyeSide\":\"Right\",\"gender\":\"Male\",\"age\":45}",
+       "gender": "Male",
+       "age": 45,
+       "city": "Cairo",
+       "status": "Normal",
+       "notes": "Sample collected on 2026-05-01",
+       "createdAt": "2026-05-01T10:30:00Z",
+       "files": [
+         {
+           "id": 1,
+           "fileName": "sample_001.mp4",
+           "fileType": 1,
+           "filePath": "/uploads/sample-1/guid.mp4",
+           "size": 5242880,
+           "uploadedAt": "2026-05-01T10:30:00Z"
+         }
+       ],
+       "tags": []
+     }
+   ]
+
+   Frontend Implementation:
+   - Display samples in grid/list
+   - Show thumbnails/previews
+   - Implement pagination
+   - Filter/search samples
+
+---
+
+2. GET SINGLE SAMPLE
+   ──────────────────
+   Endpoint: GET /api/samples/{id}
+   Access: Public
+   Description: Retrieve a specific sample with all details
+
+   URL Parameters:
+   - id: Sample ID (integer)
+
+   Example: GET /api/samples/1
+
+   Success Response (200 OK):
+   {
+     "id": 1,
+     "title": "Sample A",
+     "description": "Eye sample A001",
+     "metadata": "{\"eyeSide\":\"Right\",\"gender\":\"Male\",\"age\":45}",
+     "gender": "Male",
+     "age": 45,
+     "city": "Cairo",
+     "status": "Normal",
+     "notes": "Sample collected on 2026-05-01",
+     "createdAt": "2026-05-01T10:30:00Z",
+     "files": [
+       {
+         "id": 1,
+         "fileName": "sample_001.mp4",
+         "fileType": 1,
+         "filePath": "/uploads/sample-1/guid.mp4",
+         "size": 5242880,
+         "uploadedAt": "2026-05-01T10:30:00Z"
+       }
+     ],
+     "tags": []
+   }
+
+   Error Response (404 Not Found):
+   (No body, just 404 status)
+
+   Error Response (500 Internal Server Error):
+   {
+     "message": "Internal server error",
+     "error": "Exception details"
+   }
+
+   Frontend Implementation:
+   - Display sample details
+   - Show video player for video files
+   - Display metadata
+   - Show related files
+   - Provide download options
+
+---
+
+3. UPLOAD SAMPLE (Standard)
+   ────────────────────────
+   Endpoint: POST /api/samples/upload
+   Access: Public
+   Description: Upload a new sample with files
+
+   Request Headers:
+   - Content-Type: multipart/form-data
+   - Authorization: Bearer {accessToken}
+
+   Request Body (Form Data):
+   - title: string (required)
+   - description: string (optional)
+   - folderId: integer (required)
+   - eyeSide: string (optional)
+   - gender: string (optional)
+   - age: integer (optional)
+   - city: string (optional)
+   - status: string (optional)
+   - profession: string (optional)
+   - notes: string (optional)
+   - files: File[] (required, one or more files)
+
+   Example cURL:
+   curl -X POST http://localhost:5000/api/samples/upload \
+     -H "Authorization: Bearer {token}" \
+     -F "title=Eye Sample 001" \
+     -F "description=Normal right eye" \
+     -F "folderId=1" \
+     -F "gender=Male" \
+     -F "age=45" \
+     -F "city=Cairo" \
+     -F "files=@sample1.mp4" \
+     -F "files=@sample2.jpg"
+
+   Success Response (201 Created):
+   {
+     "id": 1,
+     "title": "Eye Sample 001",
+     "description": "Normal right eye",
+     "metadata": "{...}",
+     "gender": "Male",
+     "age": 45,
+     "city": "Cairo",
+     "createdAt": "2026-05-01T11:00:00Z",
+     "files": [...]
+   }
+
+   Error Response (400 Bad Request):
+   {
+     "message": "Folder Not Found"
+   }
+
+   Error Response (400 Bad Request):
+   {
+     "message": "At least one video is required." (for Sarab-AI endpoint)
+   }
+
+   Frontend Implementation:
+   - File upload form
+   - Multiple file selection
+   - Progress bar for uploads
+   - Metadata form fields
+   - Validate before upload
+   - Show success/error messages
+
+---
+
+4. UPLOAD SAMPLE (Sarab-AI)
+   ────────────────────────
+   Endpoint: POST /api/samples/upload/sarab-ai
+   Access: Public
+   Description: Upload sample specifically for Sarab-AI processing
+
+   Request Headers:
+   - Content-Type: multipart/form-data
+   - Authorization: Bearer {accessToken}
+
+   Request Body (Form Data):
+   - videos: File[] (required, video files only)
+   - eyeSide: string (optional)
+   - gender: string (optional)
+   - age: integer (optional)
+   - city: string (optional)
+   - status: string (optional)
+   - profession: string (optional)
+   - notes: string (optional)
+
+   Example cURL:
+   curl -X POST http://localhost:5000/api/samples/upload/sarab-ai \
+     -H "Authorization: Bearer {token}" \
+     -F "gender=Female" \
+     -F "age=32" \
+     -F "city=Riyadh" \
+     -F "videos=@video1.mp4" \
+     -F "videos=@video2.mp4"
+
+   Success Response (201 Created):
+   {
+     "id": 2,
+     "title": "Sarab-Ai",
+     "metadata": "{...}",
+     "gender": "Female",
+     "age": 32,
+     "city": "Riyadh",
+     "files": [...]
+   }
+
+   Error Response (400 Bad Request):
+   {
+     "message": "At least one video is required."
+   }
+
+   Frontend Implementation:
+   - Specialized AI upload component
+   - Video-only file selection
+   - Metadata fields
+   - Processing feedback
+   - Results display
+
+
+---[ COLLECTIONS ENDPOINTS ]---
+Route Prefix: /api/collections
+
+1. GET ALL COLLECTIONS
+   ────────────────────
+   Endpoint: GET /api/collections
+   Access: Public
+   Description: Retrieve all active collections
+
+   Request Headers:
+   - Authorization: Bearer {accessToken} (Optional)
+
+   Success Response (200 OK):
+   [
+     {
+       "id": 1,
+       "name": "Collection A",
+       "description": "Research collection",
+       "createdBy": 1,
+       "createdAt": "2026-05-01T10:00:00Z",
+       "isDeleted": false,
+       "ownerId": 1,
+       "ownerType": 0,
+       "templateId": 1,
+       "downloadCount": 5,
+       "folders": [
+         {
+           "id": 1,
+           "name": "Folder 1",
+           "description": "First folder"
+         }
+       ]
+     }
+   ]
+
+   Frontend Implementation:
+   - Display collections list
+   - Show folder count
+   - Filter by owner/type
+   - Implement search
+
+---
+
+2. GET SINGLE COLLECTION
+   ──────────────────────
+   Endpoint: GET /api/collections/{id}
+   Access: Public
+   Description: Retrieve a specific collection with folders
+
+   URL Parameters:
+   - id: Collection ID (integer)
+
+   Example: GET /api/collections/1
+
+   Success Response (200 OK):
+   {
+     "id": 1,
+     "name": "Collection A",
+     "description": "Research collection",
+     "createdBy": 1,
+     "createdAt": "2026-05-01T10:00:00Z",
+     "isDeleted": false,
+     "ownerId": 1,
+     "ownerType": 0,
+     "templateId": 1,
+     "downloadCount": 5,
+     "folders": [
+       {
+         "id": 1,
+         "name": "Folder 1",
+         "description": "First folder"
+       }
+     ]
+   }
+
+   Error Response (404 Not Found):
+   (No body, just 404 status)
+
+   Frontend Implementation:
+   - Display collection details
+   - Show folder hierarchy
+   - Implement navigation
+   - Provide download option
+
+---
+
+3. CREATE COLLECTION
+   ──────────────────
+   Endpoint: POST /api/collections
+   Access: Public
+   Description: Create a new collection
+
+   Request Headers:
+   - Content-Type: application/json
+   - Authorization: Bearer {accessToken}
+
+   Request Body:
+   {
+     "name": "Research Collection",
+     "description": "Collection for eye disease research",
+     "createdBy": 1,
+     "ownerType": 0,
+     "ownerId": 1,
+     "templateId": 1
+   }
+
+   Field Details:
+   - name: string (required)
+   - description: string (optional)
+   - createdBy: integer (required, user ID)
+   - ownerType: integer (0 = User, 1 = Group)
+   - ownerId: integer (required)
+   - templateId: integer (required, collection template ID)
+
+   Success Response (201 Created):
+   {
+     "id": 1,
+     "name": "Research Collection",
+     "description": "Collection for eye disease research",
+     "createdBy": 1,
+     "createdAt": "2026-05-01T11:00:00Z",
+     "ownerId": 1,
+     "ownerType": 0
+   }
+
+   Error Response (400 Bad Request):
+   {
+     "message": "User not found." or "Owner not found." or "Template not found."
+   }
+
+   Frontend Implementation:
+   - Collection creation form
+   - Owner type selector (User/Group)
+   - Template selection
+   - Owner/Group selection
+   - Metadata input
+   - Validation before submit
+
+---
+
+4. DOWNLOAD SINGLE COLLECTION
+   ──────────────────────────
+   Endpoint: POST /api/collections/{id}/download
+   Access: Public
+   Description: Download a single collection as ZIP
+
+   URL Parameters:
+   - id: Collection ID (integer)
+
+   Request Headers:
+   - Authorization: Bearer {accessToken}
+
+   Example: POST /api/collections/1/download
+
+   Success Response (200 OK):
+   - File download (application/zip)
+   - File name: collection-{id}.zip
+
+   Error Response (404 Not Found):
+   {
+     "message": "Collection not found."
+   }
+
+   Frontend Implementation:
+   - Download button in collection view
+   - Show download progress
+   - Handle file download
+   - Show success notification
+
+---
+
+5. DOWNLOAD MULTIPLE COLLECTIONS
+   ──────────────────────────────
+   Endpoint: POST /api/collections/download
+   Access: Public
+   Description: Download multiple collections as ZIP file
+
+   Request Headers:
+   - Content-Type: application/json
+   - Authorization: Bearer {accessToken}
+
+   Request Body:
+   {
+     "collectionIds": [1, 2, 3]
+   }
+
+   Success Response (200 OK):
+   - File download (application/zip)
+   - File name: collections.zip
+   - Contains individual collection zips
+
+   Error Response (400 Bad Request):
+   {
+     "message": "No collections selected." or "Some collections were not found."
+   }
+
+   Frontend Implementation:
+   - Multi-select collections
+   - Batch download button
+   - Download progress tracking
+   - Show download status
+
+
+================================================================================
+                     SECTION 4: ERROR HANDLING
+================================================================================
+
+COMMON HTTP STATUS CODES:
+─────────────────────────
+
+200 OK
+  - Request succeeded
+  - Contains response data
+
+201 Created
+  - Resource successfully created
+  - Contains created resource data
+
+204 No Content
+  - Request succeeded
+  - No response body (e.g., DELETE operations)
+
+400 Bad Request
+  - Invalid request parameters or body
+  - Validation errors
+  - Missing required fields
+
+401 Unauthorized
+  - Missing or invalid authentication token
+  - Token expired
+  - Insufficient permissions
+
+403 Forbidden
+  - Authenticated but not authorized for this resource
+  - Role-based restrictions
+
+404 Not Found
+  - Resource does not exist
+  - Invalid URL/endpoint
+
+409 Conflict
+  - Resource already exists (e.g., duplicate email)
+  - State conflict
+
+500 Internal Server Error
+  - Server error
+  - Unexpected exception
+
+503 Service Unavailable
+  - Server temporarily unavailable
+  - Maintenance
+
+
+ERROR RESPONSE FORMAT:
+─────────────────────
+
+Validation Error (400):
+{
+  "errors": {
+    "fieldName": ["Error message 1", "Error message 2"],
+    "anotherField": ["Error message"]
+  }
+}
+
+Business Logic Error:
+{
+  "message": "User-friendly error message"
+}
+
+Server Error (500):
+{
+  "message": "Internal server error",
+  "error": "Detailed error information (dev only)"
+}
+
+
+FRONTEND ERROR HANDLING:
+───────────────────────
+
+1. Check HTTP status code
+2. Parse error response
+3. Display user-friendly error message
+4. Log error for debugging
+5. Take action based on error type:
+   - 401: Redirect to login, refresh token, or logout
+   - 403: Show permission denied message
+   - 404: Show not found message
+   - 400: Highlight validation errors on form
+   - 500: Show generic error, log to monitoring
+
+Example Error Handler:
+```
+async function handleApiError(response) {
+  if (response.status === 401) {
+    // Try refresh token
+    await refreshAccessToken();
+    // Retry original request
+  } else if (response.status === 403) {
+    showMessage("You don't have permission for this action");
+  } else if (response.status === 404) {
+    showMessage("Resource not found");
+  } else if (response.status === 400) {
+    const error = await response.json();
+    if (error.errors) {
+      showValidationErrors(error.errors);
+    } else {
+      showMessage(error.message);
+    }
+  } else if (response.status >= 500) {
+    showMessage("Server error. Please try again later");
+    logError(response);
+  }
+}
+```
+
+
+================================================================================
+                     SECTION 5: TOKEN MANAGEMENT GUIDE
+================================================================================
+
+STORING TOKENS SECURELY:
+────────────────────────
+
+Access Token (JWT):
+  - Store in memory (most secure, lost on page refresh)
+  - OR localStorage (persistent, but XSS vulnerable)
+  - OR sessionStorage (persistent until tab close)
+  - Use memory + sessionStorage for best balance
+  - NEVER store in cookies without HttpOnly flag
+
+Refresh Token:
+  - Store in localStorage with encryption
+  - OR in HttpOnly cookie (server sends only)
+  - Set up automatic cleanup on logout
+
+Example Storage Implementation:
+```javascript
+// Store tokens after login
+function storeTokens(response) {
+  // Access token in memory
+  accessToken = response.token;
+  
+  // Refresh token in localStorage
+  localStorage.setItem('refreshToken', response.refreshToken);
+  
+  // Store token expiry
+  tokenExpiryTime = new Date(response.expiresAt).getTime();
+}
+
+// Get access token
+function getAccessToken() {
+  return accessToken;
+}
+
+// Check if token expired
+function isTokenExpired() {
+  return Date.now() >= tokenExpiryTime;
+}
+
+// Clear tokens
+function clearTokens() {
+  accessToken = null;
+  localStorage.removeItem('refreshToken');
+  tokenExpiryTime = null;
+}
+```
+
+
+TOKEN REFRESH STRATEGY:
+──────────────────────
+
+Method 1: Proactive Refresh
+- Refresh 5-10 minutes before expiry
+- Set timer when token received
+- Auto-refresh without user action
+
+```javascript
+function setupTokenRefresh(expiresIn) {
+  // Refresh 5 minutes before expiry
+  const refreshTime = (expiresIn - 5) * 60 * 1000;
+  
+  setTimeout(async () => {
+    await refreshAccessToken();
+  }, refreshTime);
+}
+
+async function refreshAccessToken() {
+  try {
+    const refreshToken = localStorage.getItem('refreshToken');
+    const response = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken })
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      storeTokens(data);
+      setupTokenRefresh(data.expiresAt);
+    } else {
+      // Refresh failed, redirect to login
+      logout();
+    }
+  } catch (error) {
+    console.error('Token refresh failed:', error);
+    logout();
+  }
+}
+```
+
+Method 2: Reactive Refresh
+- Refresh only when 401 response
+- Prevents unnecessary requests
+- Requires request retry logic
+
+```javascript
+async function makeAuthenticatedRequest(url, options) {
+  try {
+    let response = await fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        'Authorization': `Bearer ${getAccessToken()}`
+      }
+    });
+    
+    if (response.status === 401) {
+      // Try refresh token
+      const refreshed = await refreshAccessToken();
+      if (refreshed) {
+        // Retry original request
+        response = await fetch(url, {
+          ...options,
+          headers: {
+            ...options.headers,
+            'Authorization': `Bearer ${getAccessToken()}`
+          }
+        });
+      } else {
+        logout();
+      }
+    }
+    
+    return response;
+  } catch (error) {
+    console.error('Request failed:', error);
+    throw error;
+  }
+}
+```
+
+
+REQUEST INTERCEPTOR PATTERN:
+────────────────────────────
+
+```javascript
+// For Axios
+axios.interceptors.request.use(
+  config => {
+    const token = getAccessToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  error => Promise.reject(error)
+);
+
+// Response interceptor for token refresh
+axios.interceptors.response.use(
+  response => response,
+  async error => {
+    if (error.response?.status === 401) {
+      const refreshed = await refreshAccessToken();
+      if (refreshed) {
+        return axios.request(error.config);
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+```
+
+
+LOGOUT AND CLEANUP:
+───────────────────
+
+```javascript
+async function logout() {
+  try {
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (refreshToken) {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getAccessToken()}`
+        },
+        body: JSON.stringify({ refreshToken })
+      });
+    }
+  } catch (error) {
+    console.error('Logout failed:', error);
+  } finally {
+    clearTokens();
+    // Clear user context
+    setUser(null);
+    // Redirect to login
+    window.location.href = '/login';
+  }
+}
+```
+
+
+================================================================================
+                     SECTION 6: CORS CONFIGURATION
+================================================================================
+
+BACKEND CORS SETTINGS:
+──────────────────────
+
+Allowed Origins: * (All origins)
+Allowed Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD
+Allowed Headers: * (All headers)
+Allow Credentials: Not enabled (since all origins allowed)
+
+FRONTEND CORS CONSIDERATIONS:
+─────────────────────────────
+
+No special CORS handling needed if:
+- Frontend and backend on same origin
+- OR Backend CORS allows frontend origin
+- OR Requests made from same domain
+
+Example: http://localhost:3000 -> http://localhost:5000
+- Different ports but same host (localhost)
+- Browser treats as different origins = CORS applies
+- Backend CORS policy must allow http://localhost:3000
+
+If using different domains:
+- Backend CORS must include your frontend domain
+- OR Backend must set Access-Control-Allow-Credentials: true
+- OR Use CORS proxy (development only)
+
+
+================================================================================
+                     SECTION 7: API RATE LIMITING & BEST PRACTICES
+================================================================================
+
+RECOMMENDED PRACTICES:
+──────────────────────
+
+1. Caching
+   - Cache user data for 5-10 minutes
+   - Cache collection/group lists
+   - Invalidate cache on mutations
+
+2. Request Debouncing
+   - Debounce search requests (300ms delay)
+   - Debounce form input validation
+   - Prevent duplicate submissions
+
+3. Optimistic Updates
+   - Update UI immediately on user action
+   - Revert if server request fails
+   - Show loading state
+
+4. Pagination
+   - Implement pagination for large lists
+   - Load more on scroll or page change
+   - Cache pages to avoid re-fetching
+
+5. Error Recovery
+   - Implement exponential backoff for retries
+   - Show user-friendly error messages
+   - Log errors for monitoring
+
+6. Performance
+   - Use compression (gzip)
+   - Minimize payload size
+   - Batch related requests when possible
+   - Use conditional requests (ETag, Last-Modified)
+
+7. Security
+   - Always use HTTPS in production
+   - Never log sensitive data (tokens, passwords)
+   - Validate all user inputs
+   - Sanitize HTML content
+   - Use CSRF tokens if applicable
+
+8. Testing
+   - Test all error scenarios
+   - Test network failures
+   - Test token expiry and refresh
+   - Test role-based access control
+   - Load test critical endpoints
+
+
+================================================================================
+                     SECTION 8: IMPLEMENTATION CHECKLIST
+================================================================================
+
+AUTHENTICATION SETUP:
+□ Implement signup form with validation
+□ Implement login form
+□ Implement JWT token storage
+□ Setup automatic token refresh
+□ Implement logout functionality
+□ Setup request interceptors to add Authorization header
+□ Handle 401 errors globally
+□ Setup protected routes
+□ Display current user info
+□ Implement "Remember Me" if needed
+
+USER MANAGEMENT:
+□ Display user profile
+□ Implement edit profile
+□ Implement password change
+□ Implement account deletion
+□ Show user list
+□ Implement user search/filter
+
+GROUP MANAGEMENT:
+□ Display groups list
+□ Implement group creation
+□ Display group details
+□ Show group members
+□ Implement add member
+□ Implement remove member
+□ Implement change member role
+
+SAMPLES & COLLECTIONS:
+□ Display samples list
+□ Implement sample upload
+□ Display sample details
+□ Display collections list
+□ Implement collection creation
+□ Implement batch download
+□ Implement file download
+
+ADMIN FEATURES:
+□ Show admin dashboard
+□ Implement document review
+□ Show all users
+□ Show audit logs
+
+ERROR HANDLING:
+□ Display validation errors
+□ Display error messages
+□ Handle network errors
+□ Handle token expiry
+□ Handle permission errors
+□ Log errors for debugging
+
+UI/UX:
+□ Show loading states
+□ Show success messages
+□ Show error messages
+□ Implement confirmation dialogs
+□ Implement toast notifications
+□ Show progress for long operations
+□ Responsive design
+□ Accessibility features
+
+
+================================================================================
+                     SECTION 9: ENVIRONMENT CONFIGURATION
+================================================================================
+
+DEVELOPMENT:
+- API Base URL: http://localhost:5000
+- OR: http://localhost:5001
+
+PRODUCTION:
+- API Base URL: https://api.sarab-platform.com (example)
+
+STAGING:
+- API Base URL: https://staging-api.sarab-platform.com (example)
+
+Setup by environment:
+```javascript
+const API_BASE_URL = 
+  process.env.NODE_ENV === 'production' 
+    ? 'https://api.sarab-platform.com'
+    : 'http://localhost:5000';
+
+// Or use environment variable
+const API_BASE_URL = process.env.REACT_APP_API_URL;
+```
+
+.env.local (Development):
+```
+REACT_APP_API_URL=http://localhost:5000
+REACT_APP_ENV=development
+```
+
+.env.production (Production):
+```
+REACT_APP_API_URL=https://api.sarab-platform.com
+REACT_APP_ENV=production
+```
+
+
+================================================================================
+                     SECTION 10: QUICK START CODE EXAMPLES
+================================================================================
+
+COMPLETE AUTHENTICATION FLOW (JavaScript/TypeScript):
+──────────────────────────────────────────────────────
+
+```typescript
+const API_BASE_URL = 'http://localhost:5000';
+
+interface AuthResponse {
+  token: string;
+  refreshToken: string;
+  expiresAt: string;
+  user: UserPublic;
+}
+
+interface UserPublic {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  profileImagePath?: string;
+}
+
+let accessToken: string | null = null;
+let refreshToken: string | null = null;
+
+// SIGNUP
+async function signup(firstName: string, lastName: string, email: string, password: string) {
+  const response = await fetch(`${API_BASE_URL}/api/auth/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ firstName, lastName, email, password })
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Signup failed');
+  }
+
+  const data: AuthResponse = await response.json();
+  storeTokens(data);
+  return data.user;
+}
+
+// LOGIN
+async function login(email: string, password: string) {
+  const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Login failed');
+  }
+
+  const data: AuthResponse = await response.json();
+  storeTokens(data);
+  return data.user;
+}
+
+// REFRESH TOKEN
+async function refreshAccessToken() {
+  if (!refreshToken) throw new Error('No refresh token');
+
+  const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refreshToken })
+  });
+
+  if (!response.ok) {
+    clearTokens();
+    window.location.href = '/login';
+    throw new Error('Token refresh failed');
+  }
+
+  const data: AuthResponse = await response.json();
+  storeTokens(data);
+  return accessToken;
+}
+
+// LOGOUT
+async function logout() {
+  try {
+    if (refreshToken && accessToken) {
+      await fetch(`${API_BASE_URL}/api/auth/logout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ refreshToken })
+      });
+    }
+  } finally {
+    clearTokens();
+    window.location.href = '/login';
+  }
+}
+
+// STORE TOKENS
+function storeTokens(data: AuthResponse) {
+  accessToken = data.token;
+  refreshToken = data.refreshToken;
+  localStorage.setItem('refreshToken', data.refreshToken);
+}
+
+// CLEAR TOKENS
+function clearTokens() {
+  accessToken = null;
+  refreshToken = null;
+  localStorage.removeItem('refreshToken');
+}
+
+// FETCH WITH AUTH
+async function fetchWithAuth(url: string, options: RequestInit = {}) {
+  const headers = {
+    ...options.headers,
+    'Authorization': `Bearer ${accessToken}`
+  };
+
+  let response = await fetch(url, { ...options, headers });
+
+  if (response.status === 401) {
+    try {
+      await refreshAccessToken();
+      response = await fetch(url, { ...options, headers: { ...headers, 'Authorization': `Bearer ${accessToken}` } });
+    } catch {
+      window.location.href = '/login';
+      throw new Error('Authentication failed');
+    }
+  }
+
+  return response;
+}
+
+// Example: Get user profile
+async function getUserProfile(userId: number) {
+  const response = await fetchWithAuth(`${API_BASE_URL}/api/users/${userId}`);
+  return response.json();
+}
+```
+
+
+REACT EXAMPLE WITH CONTEXT:
+────────────────────────────
+
+```tsx
+import React, { createContext, useState, useContext } from 'react';
+
+interface AuthContextType {
+  user: UserPublic | null;
+  accessToken: string | null;
+  isAuthenticated: boolean;
+  signup: (data: SignupData) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<UserPublic | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+
+  const login = async (email: string, password: string) => {
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+
+    if (!response.ok) throw new Error('Login failed');
+
+    const data = await response.json();
+    setAccessToken(data.token);
+    setUser(data.user);
+    localStorage.setItem('refreshToken', data.refreshToken);
+  };
+
+  const logout = async () => {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ refreshToken: localStorage.getItem('refreshToken') })
+      });
+    } finally {
+      setAccessToken(null);
+      setUser(null);
+      localStorage.removeItem('refreshToken');
+    }
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, accessToken, isAuthenticated: !!accessToken, login, logout, signup }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
+  return context;
+}
+```
+
+
+================================================================================
+                     END OF DOCUMENTATION
+================================================================================
+
+For questions or updates, contact the backend development team.
+Last Updated: May 7, 2026
+Backend Version: 1.0
+
+================================================================================
