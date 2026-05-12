@@ -9,6 +9,7 @@ export function SignUp() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [role, setRole] = useState<'Researcher' | 'Contributor'>('Researcher');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { signup } = useAuth();
@@ -38,7 +39,7 @@ export function SignUp() {
 
     setLoading(true);
     try {
-      await signup(firstName, lastName, email, password);
+      await signup(firstName, lastName, email, password, role);
       navigate('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign up failed. Please try again.');
@@ -110,6 +111,40 @@ export function SignUp() {
                 required
                 autoComplete="email"
               />
+            </div>
+
+            <div>
+              <span className="block text-sm font-medium mb-1.5">Account Type</span>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="flex items-center gap-3 rounded-lg border border-border p-4 cursor-pointer transition hover:border-[#9481ff]">
+                  <input
+                    type="radio"
+                    name="role"
+                    value="Researcher"
+                    checked={role === 'Researcher'}
+                    onChange={() => setRole('Researcher')}
+                    className="h-4 w-4 text-[#9481ff]"
+                  />
+                  <div>
+                    <span className="font-medium">Researcher</span>
+                    <p className="text-sm text-muted-foreground">Can browse public groups and collections.</p>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 rounded-lg border border-border p-4 cursor-pointer transition hover:border-[#9481ff]">
+                  <input
+                    type="radio"
+                    name="role"
+                    value="Contributor"
+                    checked={role === 'Contributor'}
+                    onChange={() => setRole('Contributor')}
+                    className="h-4 w-4 text-[#9481ff]"
+                  />
+                  <div>
+                    <span className="font-medium">Contributor</span>
+                    <p className="text-sm text-muted-foreground">Can upload samples and contribute to collections.</p>
+                  </div>
+                </label>
+              </div>
             </div>
 
             <div>

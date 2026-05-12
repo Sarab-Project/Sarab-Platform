@@ -63,6 +63,11 @@ export interface CollectionFolder {
   description?: string;
 }
 
+export interface Tag {
+  id: number;
+  name: string;
+}
+
 export interface Folder {
   id: number;
   name: string;
@@ -144,6 +149,7 @@ export interface UploadSampleDto {
   status?: string;
   profession?: string;
   notes?: string;
+  tags?: string[];
   files: File[];
 }
 
@@ -201,14 +207,6 @@ async function handleResponse<T>(res: Response): Promise<T> {
   return res.blob() as unknown as Promise<T>;
 }
 
-export function getFileUrl(filePath: string): string {
-  if (!filePath) return '';
-  if (filePath.startsWith('http')) return filePath;
-  // Normalize backslashes
-  const normalized = filePath.replace(/\\/g, '/');
-  return `${STATIC_BASE_URL}${normalized.startsWith('/') ? '' : '/'}${normalized}`;
-}
-
 export function parseMetadata(metadataString: string): Record<string, any> {
   try {
     return JSON.parse(metadataString);
@@ -228,11 +226,11 @@ export async function apiLogin(email: string, password: string) {
   return handleResponse<any>(res);
 }
 
-export async function apiSignup(firstName: string, lastName: string, email: string, password: string) {
+export async function apiSignup(firstName: string, lastName: string, email: string, password: string, role: 'Researcher' | 'Contributor') {
   const res = await fetch(`${API_BASE_URL}/auth/signup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ firstName, lastName, email, password }),
+    body: JSON.stringify({ firstName, lastName, email, password, role }),
   });
   return handleResponse<any>(res);
 }
@@ -297,6 +295,16 @@ export async function fetchSampleById(id: number): Promise<Sample> {
     headers: getAuthHeaders(),
   });
   return handleResponse<Sample>(res);
+}
+
+export async function fetchSampleFileBlob(sampleId: number, fileId: number): Promise<Blob> {
+  const res = await fetch(`${API_BASE_URL}/samples/${sampleId}/files/${fileId}`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to load file (${res.status})`);
+  }
+  return await res.blob();
 }
 
 export async function searchSamples(dto: SearchSampleDto): Promise<Sample[]> {
@@ -415,6 +423,22 @@ export async function fetchFolders(): Promise<Folder[]> {
 export async function fetchFolderById(id: number): Promise<Folder> {
   const res = await fetch(`${API_BASE_URL}/folders/${id}`, {
     headers: getAuthHeaders(),
+  });
+  return handleResponse<Folder>(res);
+}
+
+export interface CreateFolderDto {
+  name: string;
+  parentId?: number;
+  collectionId: number;
+  createdBy: number;
+}
+
+export async function createFolder(dto: CreateFolderDto): Promise<Folder> {
+  const res = await fetch(`${API_BASE_URL}/folders`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(dto),
   });
   return handleResponse<Folder>(res);
 }

@@ -1,0 +1,15 @@
+# --- Frontend (React) ---
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.env
+
+# --- Backend (.NET) ---
+backend/bin/
+backend/obj/
+backend/appsettings.Development.json
+backend/.env
+
+# --- General System Files ---
+.DS_Store
+Thumbs.db

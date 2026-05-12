@@ -10,22 +10,63 @@ import { AdminDashboard } from './pages/AdminDashboard';
 import { Profile } from './pages/Profile';
 import { About } from './pages/About';
 import { Groups } from './pages/Groups';
+import { ProtectedRoute, GuestRoute } from './components/ProtectedRoute';
 
 export const router = createBrowserRouter([
   {
     path: '/',
     Component: Layout,
     children: [
-      { index: true, Component: DatabaseView },
-      { path: 'sample/:id', Component: SampleDetail },
-      { path: 'upload', Component: UploadSample },
-      { path: 'my-uploads', Component: MyUploads },
-      { path: 'admin', Component: AdminDashboard },
-      { path: 'profile', Component: Profile },
-      { path: 'about', Component: About },
-      { path: 'signin', Component: SignIn },
-      { path: 'signup', Component: SignUp },
-      { path: 'groups', Component: Groups },
+      { index: true, Component: () => (
+        <ProtectedRoute>
+          <DatabaseView />
+        </ProtectedRoute>
+      ) },
+      { path: 'sample/:id', Component: () => (
+        <ProtectedRoute>
+          <SampleDetail />
+        </ProtectedRoute>
+      ) },
+      { path: 'upload', Component: () => (
+        <ProtectedRoute>
+          <UploadSample />
+        </ProtectedRoute>
+      ) },
+      { path: 'my-uploads', Component: () => (
+        <ProtectedRoute>
+          <MyUploads />
+        </ProtectedRoute>
+      ) },
+      { path: 'admin', Component: () => (
+        <ProtectedRoute>
+          <AdminDashboard />
+        </ProtectedRoute>
+      ) },
+      { path: 'profile', Component: () => (
+        <ProtectedRoute>
+          <Profile />
+        </ProtectedRoute>
+      ) },
+      { path: 'about', Component: () => (
+        <ProtectedRoute>
+          <About />
+        </ProtectedRoute>
+      ) },
+      { path: 'signin', Component: () => (
+        <GuestRoute>
+          <SignIn />
+        </GuestRoute>
+      ) },
+      { path: 'signup', Component: () => (
+        <GuestRoute>
+          <SignUp />
+        </GuestRoute>
+      ) },
+      { path: 'groups', Component: () => (
+        <ProtectedRoute>
+          <Groups />
+        </ProtectedRoute>
+      ) },
     ],
   },
 ]);

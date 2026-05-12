@@ -1,13 +1,18 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SarabPlatform.Data;
 using SarabPlatform.Dto;
+using SarabPlatform.Enum;
 using SarabPlatform.Models;
 
 namespace SarabPlatform.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class FoldersController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -16,37 +21,75 @@ namespace SarabPlatform.Controllers
             _context = context;
         }
 
+        private int GetCurrentUserId()
+        {
+            var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue(JwtRegisteredClaimNames.Sub);
+            return int.TryParse(userIdValue, out var userId) ? userId : 0;
+        }
+
+        private bool IsAdminUser() => User.IsInRole("Admin");
+
+        private static bool IsPrivateCollection(Collection collection)
+        {
+            return string.Equals(collection.Name, "Private", StringComparison.OrdinalIgnoreCase);
+        }
+
         [HttpGet]
+        [AllowAnonymous]
         public IActionResult GetFolders()
         {
-            var folders = _context.Folders
-                .Where(f => !f.IsDeleted)
+            var currentUserId = GetCurrentUserId();
+            IQueryable<Folder> query = _context.Folders
+                .Where(f => !f.IsDeleted && !f.Collection!.IsDeleted)
                 .Include(f => f.Samples!.Where(sa => !sa.IsDeleted))
                 .Include(f => f.Children!.Where(c => !c.IsDeleted))
-                .ToList();
+                .Include(f => f.Collection);
+
+            if (!IsAdminUser())
+            {
+                query = query.Where(f => f.Collection!.Name != "Private" || (f.Collection!.OwnerType == OwnerType.User && f.Collection!.OwnerId == currentUserId));
+            }
+
+            var folders = query.ToList();
             return Ok(folders);
         }
         
         [HttpGet("{id}")]
+        [AllowAnonymous]
         public IActionResult GetFolder(int id)
         {
+            var currentUserId = GetCurrentUserId();
             var folder = _context.Folders
                 .Include(f => f.Samples!.Where(sa => !sa.IsDeleted))
                 .Include(f => f.Children!.Where(c => !c.IsDeleted))
-                .FirstOrDefault(f => f.Id == id && !f.IsDeleted);
+                .Include(f => f.Collection)
+                .FirstOrDefault(f => f.Id == id && !f.IsDeleted && !f.Collection!.IsDeleted);
             if (folder == null)
             {
                 return NotFound();
             }
+
+            if (!IsAdminUser() && IsPrivateCollection(folder.Collection!) && !(folder.Collection!.OwnerType == OwnerType.User && folder.Collection!.OwnerId == currentUserId))
+            {
+                return NotFound();
+            }
+
             return Ok(folder);
         }
 
         [HttpPost]
+        [Authorize(Policy = "ContributorOrAdmin")]
         public IActionResult CreateFolder([FromBody] CreateFolderDto dto)
         {
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
+            }
+
+            var currentUserId = GetCurrentUserId();
+            if (currentUserId == 0)
+            {
+                return Unauthorized();
             }
 
             // Check if Collection exists
@@ -56,8 +99,7 @@ namespace SarabPlatform.Controllers
                 return BadRequest("Collection not found.");
             }
 
-            // Check if User exists
-            var user = _context.Users.FirstOrDefault(u => u.Id == dto.CreatedBy);
+            var user = _context.Users.FirstOrDefault(u => u.Id == currentUserId);
             if (user == null)
             {
                 return BadRequest("User not found.");
@@ -78,7 +120,7 @@ namespace SarabPlatform.Controllers
                 Name = dto.Name,
                 ParentId = dto.ParentId,
                 CollectionId = dto.CollectionId,
-                CreatedBy = dto.CreatedBy,
+                CreatedBy = currentUserId,
                 CreatedAt = DateTime.UtcNow
             };
             try
@@ -94,6 +136,7 @@ namespace SarabPlatform.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Policy = "ContributorOrAdmin")]
         public async Task<IActionResult> DeleteFolder(int id)
         {
             var folder = _context.Folders.FirstOrDefault(f => f.Id == id && !f.IsDeleted);

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 using SarabPlatform.Enum;
 
 namespace SarabPlatform.Models
@@ -12,6 +13,7 @@ namespace SarabPlatform.Models
         [Required]
         public FileType FileType { get; set; }
         [Required]
+        [JsonIgnore]
         public string? FilePath { get; set; }
         public int Size { get; set; }
         public int SampleId { get; set; }

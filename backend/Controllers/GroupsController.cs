@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SarabPlatform.Data;
@@ -9,6 +10,7 @@ namespace SarabPlatform.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class GroupsController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -18,6 +20,7 @@ namespace SarabPlatform.Controllers
         }
 
         [HttpGet]
+        [AllowAnonymous]
         public IActionResult GetGroups()
         {
             var groups = _context.Groups
@@ -48,6 +51,7 @@ namespace SarabPlatform.Controllers
         }
 
         [HttpGet("{id}")]
+        [AllowAnonymous]
         public IActionResult GetGroup(int id)
         {
             var group = _context.Groups
@@ -83,8 +87,15 @@ namespace SarabPlatform.Controllers
         }
 
         [HttpPost]
+        [Authorize(Policy = "ContributorOrAdmin")]
         public IActionResult CreateGroup(CreateGroupDto dto)
         {
+            var creator = _context.Users.FirstOrDefault(u => u.Id == dto.CreatedBy);
+            if (creator == null)
+            {
+                return BadRequest("Creator user not found.");
+            }
+
             var group = new Group
             {
                 Name = dto.Name,
@@ -92,12 +103,24 @@ namespace SarabPlatform.Controllers
                 CreatedBy = dto.CreatedBy,
                 CreatedAt = DateTime.UtcNow
             };
+
             _context.Groups.Add(group);
             _context.SaveChanges();
+
+            _context.GroupMembers.Add(new GroupMember
+            {
+                GroupId = group.Id,
+                UserId = dto.CreatedBy,
+                Role = 0,
+                JoinedAt = DateTime.UtcNow
+            });
+            _context.SaveChanges();
+
             return CreatedAtAction(nameof(GetGroup), new { id = group.Id }, group);
         }
                 
         [HttpDelete("{id}")]
+        [Authorize(Policy = "AdminOnly")]
         public IActionResult DeleteGroup(int id)
         {
             var group = _context.Groups.FirstOrDefault(g => g.Id == id && !g.IsDeleted);
@@ -112,6 +135,7 @@ namespace SarabPlatform.Controllers
         }
 
         [HttpPost("{groupId}/members")]
+        [Authorize(Policy = "AdminOnly")]
         public IActionResult AddMember(int groupId, [FromBody] AddMembersDto dto)
         {
             var group = _context.Groups.FirstOrDefault(g => g.Id == groupId && !g.IsDeleted);
@@ -175,6 +199,7 @@ namespace SarabPlatform.Controllers
         }
 
         [HttpPut("{groupId}/members/{userId}")]
+        [Authorize(Policy = "AdminOnly")]
         public IActionResult ChangeMemberRole(int groupId, int userId,[FromBody] ChangeMemberRoleDto dto)
         {
             var group = _context.Groups.FirstOrDefault(g => g.Id == groupId && !g.IsDeleted);
@@ -194,6 +219,7 @@ namespace SarabPlatform.Controllers
         }
 
         [HttpDelete("{groupId}/members/{userId}")]
+        [Authorize(Policy = "AdminOnly")]
         public IActionResult RemoveMember(int groupId, int userId)
         {
             var membership = _context.GroupMembers.FirstOrDefault(gm => gm.GroupId == groupId && gm.UserId == userId);

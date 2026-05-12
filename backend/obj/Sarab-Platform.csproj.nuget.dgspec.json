@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\جامعة\\مشروع فصلي\\Back-End\\Sarab-Platform\\backend\\Sarab-Platform.csproj": {}
+    "C:\\جامعة\\مشروع فصلي\\Development\\Sarab-Platform\\backend\\Sarab-Platform.csproj": {}
   },
   "projects": {
-    "C:\\جامعة\\مشروع فصلي\\Back-End\\Sarab-Platform\\backend\\Sarab-Platform.csproj": {
+    "C:\\جامعة\\مشروع فصلي\\Development\\Sarab-Platform\\backend\\Sarab-Platform.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\جامعة\\مشروع فصلي\\Back-End\\Sarab-Platform\\backend\\Sarab-Platform.csproj",
+        "projectUniqueName": "C:\\جامعة\\مشروع فصلي\\Development\\Sarab-Platform\\backend\\Sarab-Platform.csproj",
         "projectName": "Sarab-Platform",
-        "projectPath": "C:\\جامعة\\مشروع فصلي\\Back-End\\Sarab-Platform\\backend\\Sarab-Platform.csproj",
+        "projectPath": "C:\\جامعة\\مشروع فصلي\\Development\\Sarab-Platform\\backend\\Sarab-Platform.csproj",
         "packagesPath": "C:\\Users\\ASUS\\.nuget\\packages\\",
-        "outputPath": "C:\\جامعة\\مشروع فصلي\\Back-End\\Sarab-Platform\\backend\\obj\\",
+        "outputPath": "C:\\جامعة\\مشروع فصلي\\Development\\Sarab-Platform\\backend\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\ASUS\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -47,6 +47,10 @@
             "BCrypt.Net-Next": {
               "target": "Package",
               "version": "[4.1.0, )"
+            },
+            "Microsoft.AspNetCore.Authentication.JwtBearer": {
+              "target": "Package",
+              "version": "[10.0.4, )"
             },
             "Microsoft.AspNetCore.OpenApi": {
               "target": "Package",

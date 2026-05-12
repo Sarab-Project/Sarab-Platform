@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchCollections, uploadSample, type Collection } from '../services/api';
 import { UploadCloud, X, File as FileIcon, AlertCircle, CheckCircle, Loader } from 'lucide-react';
@@ -7,6 +7,7 @@ import { UploadCloud, X, File as FileIcon, AlertCircle, CheckCircle, Loader } fr
 export function UploadSample() {
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   // Form fields
   const [title, setTitle] = useState('');
@@ -19,6 +20,7 @@ export function UploadSample() {
   const [status, setStatus] = useState('');
   const [profession, setProfession] = useState('');
   const [notes, setNotes] = useState('');
+  const [tagInput, setTagInput] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -43,6 +45,21 @@ export function UploadSample() {
       .catch(() => {})
       .finally(() => setCollectionsLoading(false));
   }, [isAuthenticated]);
+
+  // Handle URL query params for pre-selection
+  useEffect(() => {
+    const collectionId = searchParams.get('collectionId');
+    const folderIdParam = searchParams.get('folderId');
+
+    if (collectionId) {
+      setSelectedCollectionId(collectionId);
+    }
+    if (folderIdParam) {
+      setFolderId(folderIdParam);
+    }
+  }, [searchParams, collections]);
+
+  const isAllowedToUpload = user?.role === 'Contributor' || user?.role === 'Admin';
 
   const selectedCollection = collections.find(c => c.id.toString() === selectedCollectionId);
   const availableFolders = selectedCollection?.folders || [];
@@ -83,6 +100,11 @@ export function UploadSample() {
     }, 300);
 
     try {
+      const parsedTags = tagInput
+        .split(/[,;\n]+/)
+        .map(tag => tag.trim())
+        .filter(Boolean);
+
       await uploadSample({
         title,
         description: description || undefined,
@@ -94,6 +116,7 @@ export function UploadSample() {
         status: status || undefined,
         profession: profession || undefined,
         notes: notes || undefined,
+        tags: parsedTags.length > 0 ? parsedTags : undefined,
         files: selectedFiles,
       });
 
@@ -126,6 +149,19 @@ export function UploadSample() {
           </div>
           <h3 className="font-bold mb-2">Upload Successful!</h3>
           <p className="text-muted-foreground">Redirecting to your uploads...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAllowedToUpload) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-background p-6">
+        <div className="max-w-lg text-center border border-border rounded-2xl bg-card p-8 shadow-sm">
+          <div className="mb-4 text-2xl font-semibold">Access Restricted</div>
+          <p className="text-sm text-muted-foreground">
+            Only contributor accounts may upload samples. Please sign in with a contributor account or create one from the sign-up page.
+          </p>
         </div>
       </div>
     );
@@ -183,6 +219,20 @@ export function UploadSample() {
                   placeholder="Describe the sample, clinical information, imaging modality..."
                   className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40 min-h-24 resize-y"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1.5">Tags</label>
+                <input
+                  type="text"
+                  value={tagInput}
+                  onChange={e => setTagInput(e.target.value)}
+                  placeholder="Add tags separated by commas, e.g., glaucoma, drusen"
+                  className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40"
+                />
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Add multiple keywords that describe the sample. Tags can be used to filter search results.
+                </p>
               </div>
             </div>
           </div>

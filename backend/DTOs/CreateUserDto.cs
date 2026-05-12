@@ -15,6 +15,9 @@ namespace SarabPlatform.Dto
         [MinLength(8)]
         public string? Password { get; set; }
 
+        [Required]
+        [RegularExpression("^(Researcher|Contributor)$", ErrorMessage = "Role must be Researcher or Contributor")]
+        public string? Role { get; set; }
     }
 
 

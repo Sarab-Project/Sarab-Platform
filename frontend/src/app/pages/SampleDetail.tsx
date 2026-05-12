@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import {
   fetchSampleById, downloadSample, downloadSampleFiles,
-  getFileUrl, triggerDownload, type Sample as ApiSample, type ResourceFile
+  fetchSampleFileBlob, triggerDownload, parseMetadata, type Sample as ApiSample, type ResourceFile
 } from '../services/api';
 
 interface FileItem {
@@ -34,9 +34,16 @@ export function SampleDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const [downloadingAll, setDownloadingAll] = useState(false);
   const [downloadingFileId, setDownloadingFileId] = useState<number | null>(null);
+
+  const additionalMetadata = sample
+    ? Object.entries(parseMetadata(sample.metadata || '')).filter(
+        ([key]) => !['EyeSide', 'Gender', 'Age', 'City', 'Status', 'Profession', 'Notes'].includes(key)
+      )
+    : [];
 
   useEffect(() => {
     async function load() {
@@ -51,7 +58,6 @@ export function SampleDetail() {
           name: f.fileName,
           type: getFileType(f.fileName),
           size: f.size > 0 ? `${(f.size / 1048576).toFixed(2)} MB` : 'Unknown',
-          url: getFileUrl(f.filePath),
         }));
         setFiles(mapped);
         if (mapped.length > 0) setSelectedFile(mapped[0]);
@@ -81,15 +87,47 @@ export function SampleDetail() {
     if (!sample) return;
     setDownloadingFileId(file.id);
     try {
-      const blob = await downloadSampleFiles(sample.id, [file.id]);
+      const blob = await fetchSampleFileBlob(sample.id, file.id);
       triggerDownload(blob, file.name);
-    } catch {
-      // Fallback: open URL
-      window.open(file.url, '_blank');
+    } catch (err) {
+      console.error('Download failed:', err);
     } finally {
       setDownloadingFileId(null);
     }
   };
+
+  useEffect(() => {
+    let activeUrl: string | null = null;
+
+    const loadPreview = async () => {
+      if (!sample || !selectedFile) {
+        setPreviewUrl(null);
+        return;
+      }
+
+      if (selectedFile.type !== 'Image' && selectedFile.type !== 'Video') {
+        setPreviewUrl(null);
+        return;
+      }
+
+      try {
+        const blob = await fetchSampleFileBlob(sample.id, selectedFile.id);
+        activeUrl = URL.createObjectURL(blob);
+        setPreviewUrl(activeUrl);
+      } catch (err) {
+        console.error('Preview failed:', err);
+        setPreviewUrl(null);
+      }
+    };
+
+    loadPreview();
+
+    return () => {
+      if (activeUrl) {
+        URL.revokeObjectURL(activeUrl);
+      }
+    };
+  }, [sample, selectedFile]);
 
   const renderPreview = () => {
     if (!selectedFile) return (
@@ -101,27 +139,35 @@ export function SampleDetail() {
 
     if (selectedFile.type === 'Image') return (
       <div className="w-full min-h-[400px] flex items-center justify-center bg-black/5 rounded-xl overflow-hidden border border-border">
-        <img
-          src={selectedFile.url}
-          alt={selectedFile.name}
-          className="max-w-full max-h-[600px] object-contain"
-          onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-        />
+        {previewUrl ? (
+          <img
+            src={previewUrl}
+            alt={selectedFile.name}
+            className="max-w-full max-h-[600px] object-contain"
+            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+        ) : (
+          <div className="text-muted-foreground text-sm">Loading preview…</div>
+        )}
       </div>
     );
 
     if (selectedFile.type === 'Video') return (
       <div className="w-full min-h-[400px] flex items-center justify-center bg-black rounded-xl overflow-hidden border border-border">
-        <video
-          key={selectedFile.url}
-          src={selectedFile.url}
-          controls
-          className="max-w-full max-h-[600px] w-full"
-        >
-          <source src={selectedFile.url} type="video/mp4" />
-          <source src={selectedFile.url} type="video/webm" />
-          Your browser does not support video.
-        </video>
+        {previewUrl ? (
+          <video
+            key={previewUrl}
+            src={previewUrl}
+            controls
+            className="max-w-full max-h-[600px] w-full"
+          >
+            <source src={previewUrl} type="video/mp4" />
+            <source src={previewUrl} type="video/webm" />
+            Your browser does not support video.
+          </video>
+        ) : (
+          <div className="text-white/70 text-sm">Loading preview…</div>
+        )}
       </div>
     );
 
@@ -270,6 +316,19 @@ export function SampleDetail() {
                     <div className="col-span-2 text-sm text-muted-foreground italic">No metadata provided</div>
                   )}
                 </div>
+                {additionalMetadata.length > 0 && (
+                  <div className="col-span-2 mt-4 border-t border-border pt-4">
+                    <div className="text-xs text-muted-foreground font-medium mb-3">Additional metadata</div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                      {additionalMetadata.map(([key, value]) => (
+                        <div key={key}>
+                          <div className="text-xs text-muted-foreground font-medium mb-0.5">{key}</div>
+                          <div className="text-sm font-medium break-words">{String(value)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="border border-border rounded-xl bg-card p-5 shadow-sm">
@@ -293,6 +352,18 @@ export function SampleDetail() {
                     <div>
                       <div className="text-xs text-muted-foreground font-medium mb-0.5">Notes</div>
                       <div className="text-sm font-medium whitespace-pre-wrap">{sample.notes}</div>
+                    </div>
+                  )}
+                  {additionalMetadata.length > 0 && (
+                    <div>
+                      <div className="text-xs text-muted-foreground font-medium mb-0.5">Additional Metadata</div>
+                      <div className="text-sm font-medium">
+                        {additionalMetadata.map(([key, value]) => (
+                          <div key={key} className="mb-1">
+                            <span className="font-semibold">{key}:</span> {String(value)}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>

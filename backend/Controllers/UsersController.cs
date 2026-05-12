@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SarabPlatform.Data;
 using SarabPlatform.Models;
@@ -12,6 +13,7 @@ namespace SarabPlatform.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
  public class UsersController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -47,6 +49,11 @@ namespace SarabPlatform.Controllers
         [HttpPost]
         public ActionResult<User> CreateUser(CreateUserDto dto)
         {
+            if (!System.Enum.TryParse<UserRole>(dto.Role, true, out var parsedRole) || parsedRole == UserRole.Admin)
+            {
+                return BadRequest("Role must be Researcher or Contributor");
+            }
+
             var hashedPassword = BCrypt.Net.BCrypt.HashPassword(dto.Password);
             var user = new User
             {
@@ -54,12 +61,42 @@ namespace SarabPlatform.Controllers
               LastName = dto.LastName,
               Email = dto.Email,
               PasswordHash = hashedPassword,
-              Role = UserRole.Researcher,
+              Role = parsedRole,
               CreatedAt = DateTime.UtcNow,
             };
             _context.Users.Add(user);
             _context.SaveChanges();
+
+            CreateDefaultCollectionsForUser(user);
+            _context.SaveChanges();
+
             return CreatedAtAction(nameof(GetUser), new { id = user.Id }, user);
+        }
+
+        private void CreateDefaultCollectionsForUser(User user)
+        {
+            _context.Collections.AddRange(
+                new Collection
+                {
+                    Name = "Private",
+                    Description = "Private collection for this user",
+                    CreatedBy = user.Id,
+                    OwnerId = user.Id,
+                    OwnerType = OwnerType.User,
+                    TemplateId = 0,
+                    CreatedAt = DateTime.UtcNow
+                },
+                new Collection
+                {
+                    Name = "Public",
+                    Description = "Public collection visible to all users",
+                    CreatedBy = user.Id,
+                    OwnerId = user.Id,
+                    OwnerType = OwnerType.User,
+                    TemplateId = 0,
+                    CreatedAt = DateTime.UtcNow
+                }
+            );
         }
 
         [HttpPut("{id}")]

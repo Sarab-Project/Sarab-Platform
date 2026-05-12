@@ -8,7 +8,7 @@ import {
 import {
   fetchSamples, fetchCollections, fetchGroups, fetchFolders,
   downloadSample, downloadSamples, downloadCollections, createCollection,
-  triggerDownload, searchSamples,
+  triggerDownload, searchSamples, createFolder,
   type Sample as ApiSample, type Collection, type Folder as ApiFolder,
   type Group, type Tag
 } from '../services/api';
@@ -23,12 +23,14 @@ export function DatabaseView() {
   const [filterStatus, setFilterStatus] = useState('');
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
+  const canManageContent = user?.role === 'Admin' || user?.role === 'Contributor';
 
   // API State
   const [samples, setSamples] = useState<ApiSample[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [folders, setFolders] = useState<ApiFolder[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,6 +41,10 @@ export function DatabaseView() {
   // My Collection folder navigation
   const [currentFolderId, setCurrentFolderId] = useState<number | null>(null);
 
+  // Collection browsing state
+  const [currentCollectionId, setCurrentCollectionId] = useState<number | null>(null);
+  const [currentCollectionFolderId, setCurrentCollectionFolderId] = useState<number | null>(null);
+
   // Collection creation
   const [showCreateCollection, setShowCreateCollection] = useState(false);
   const [newCollName, setNewCollName] = useState('');
@@ -46,9 +52,18 @@ export function DatabaseView() {
   const [createCollLoading, setCreateCollLoading] = useState(false);
   const [createCollError, setCreateCollError] = useState('');
 
+  // Folder creation
+  const [showCreateFolder, setShowCreateFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [newFolderDesc, setNewFolderDesc] = useState('');
+  const [createFolderLoading, setCreateFolderLoading] = useState(false);
+  const [createFolderError, setCreateFolderError] = useState('');
+
   // Search debounce
   const [searchTimeout, setSearchTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
 
   useEffect(() => {
     loadData();
@@ -58,17 +73,19 @@ export function DatabaseView() {
     setLoading(true);
     setError(null);
     try {
-      const [s, c, g, f] = await Promise.allSettled([
+      const [s, c, g, f, t] = await Promise.allSettled([
         fetchSamples(),
         fetchCollections(),
         fetchGroups(),
         fetchFolders(),
+        fetchTags(),
       ]);
       if (s.status === 'fulfilled') setSamples(s.value);
       else if (s.status === 'rejected') setError(s.reason?.message || 'Failed to fetch samples');
       if (c.status === 'fulfilled') setCollections(c.value);
       if (g.status === 'fulfilled') setGroups(g.value);
       if (f.status === 'fulfilled') setFolders(f.value);
+      if (t.status === 'fulfilled') setTags(t.value);
     } finally {
       setLoading(false);
     }
@@ -78,9 +95,35 @@ export function DatabaseView() {
   const handleSearchChange = (query: string) => {
     setSearchQuery(query);
     if (searchTimeout) clearTimeout(searchTimeout);
-    if (query.trim().length === 0) return;
+
+    const trimmed = query.trim();
+    if (trimmed.length === 0) {
+      setShowSuggestions(false);
+      setSuggestions([]);
+      return;
+    }
+
+    // Generate suggestions
+    const lowerQuery = trimmed.toLowerCase();
+    const tagSuggestions = tags
+      .filter(tag => tag.name.toLowerCase().includes(lowerQuery))
+      .map(tag => tag.name)
+      .slice(0, 5);
+
+    const commonSuggestions = [
+      'image', 'video', 'document',
+      'male', 'female',
+      'glaucoma', 'diabetic retinopathy', 'macular degeneration',
+      'left', 'right'
+    ].filter(s => s.includes(lowerQuery)).slice(0, 3);
+
+    const allSuggestions = [...tagSuggestions, ...commonSuggestions].slice(0, 8);
+    setSuggestions(allSuggestions);
+    setShowSuggestions(allSuggestions.length > 0);
+
     const timeout = setTimeout(async () => {
       setIsSearching(true);
+      setShowSuggestions(false);
       try {
         const results = await searchSamples({ keyword: query, pageSize: 50 });
         setSamples(results);
@@ -137,6 +180,26 @@ export function DatabaseView() {
   const displayedFolders = folders.filter(f => f.parentId === currentFolderId);
   const displayedMySamples = samples.filter(s =>
     s.createdBy === user?.id && s.folderId === currentFolderId
+  );
+
+  // Collection browsing
+  const currentCollection = collections.find(c => c.id === currentCollectionId);
+  const collectionBreadcrumbs = useMemo(() => {
+    if (!currentCollection) return [];
+    const crumbs: ApiFolder[] = [];
+    let curr = folders.find(f => f.id === currentCollectionFolderId);
+    while (curr) {
+      crumbs.unshift(curr);
+      curr = curr.parentId ? folders.find(f => f.id === curr!.parentId) : undefined;
+    }
+    return crumbs;
+  }, [currentCollection, currentCollectionFolderId, folders]);
+
+  const displayedCollectionFolders = folders.filter(f =>
+    f.collectionId === currentCollectionId && f.parentId === currentCollectionFolderId
+  );
+  const displayedCollectionSamples = samples.filter(s =>
+    s.folderId === currentCollectionFolderId
   );
 
   const toggleSelection = (id: number) => {
@@ -199,6 +262,41 @@ export function DatabaseView() {
     }
   };
 
+  const handleCreateFolder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    setCreateFolderLoading(true);
+    setCreateFolderError('');
+
+    const parentId = activeTab === 'my-collection' ? currentFolderId : currentCollectionFolderId;
+    const collectionId = activeTab === 'my-collection'
+      ? (user.role === 'Admin' ? null : collections.find(c => c.name === 'Private' && c.ownerId === user.id)?.id)
+      : currentCollectionId;
+
+    if (!collectionId) {
+      setCreateFolderError('No collection selected');
+      setCreateFolderLoading(false);
+      return;
+    }
+
+    try {
+      const folder = await createFolder({
+        name: newFolderName,
+        parentId: parentId || undefined,
+        collectionId,
+        createdBy: user.id,
+      });
+      setFolders(prev => [...prev, folder]);
+      setShowCreateFolder(false);
+      setNewFolderName('');
+      setNewFolderDesc('');
+    } catch (err) {
+      setCreateFolderError(err instanceof Error ? err.message : 'Failed to create folder');
+    } finally {
+      setCreateFolderLoading(false);
+    }
+  };
+
   const getFileTypeBadge = (sample: ApiSample) => {
     if (!sample.files?.length) return 'No files';
     const f = sample.files[0].fileName.toLowerCase();
@@ -221,11 +319,11 @@ export function DatabaseView() {
               Explore, manage, and contribute to ophthalmic research
             </p>
 
-            <div className="max-w-3xl mx-auto">
+            <div className="max-w-3xl mx-auto relative">
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="Search by title, condition, tags, city, gender..."
+                  placeholder="Search by title, condition, tags, city, gender, profession, notes..."
                   value={searchQuery}
                   onChange={e => handleSearchChange(e.target.value)}
                   className="w-full px-5 py-4 pl-12 pr-10 border-2 rounded-xl bg-background shadow-sm focus:outline-none focus:ring-2 focus:ring-[#9481ff]/30 focus:border-[#9481ff] transition-all"
@@ -245,12 +343,42 @@ export function DatabaseView() {
                   </button>
                 )}
               </div>
+
+              {/* Suggestions Dropdown */}
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
+                  {suggestions.map((suggestion, index) => (
+                    <button
+                      key={index}
+                      onClick={() => {
+                        setSearchQuery(suggestion);
+                        setShowSuggestions(false);
+                        handleSearchChange(suggestion);
+                      }}
+                      className="w-full px-4 py-2 text-left hover:bg-accent hover:text-accent-foreground transition-colors"
+                    >
+                      <Search size={16} className="inline mr-2" />
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
           <div className="flex items-center justify-center gap-2 overflow-x-auto pb-1">
-            <TabButton active={activeTab === 'flat'} onClick={() => setActiveTab('flat')} icon={<LayoutGrid size={16} />} label="Flat View" />
-            <TabButton active={activeTab === 'collections'} onClick={() => setActiveTab('collections')} icon={<Layers size={16} />} label="Collections" />
+            <TabButton
+              active={activeTab === 'flat'}
+              onClick={() => setActiveTab('flat')}
+              icon={<LayoutGrid size={16} />}
+              label="Flat View"
+            />
+            <TabButton
+              active={activeTab === 'collections' && !currentCollectionId}
+              onClick={() => { setActiveTab('collections'); setCurrentCollectionId(null); setCurrentCollectionFolderId(null); }}
+              icon={<Layers size={16} />}
+              label="Collections"
+            />
             <TabButton active={activeTab === 'groups'} onClick={() => setActiveTab('groups')} icon={<Users size={16} />} label="Groups" />
             {isAuthenticated && (
               <TabButton
@@ -372,13 +500,13 @@ export function DatabaseView() {
           )}
 
           {/* ─── COLLECTIONS ─── */}
-          {!loading && activeTab === 'collections' && (
+          {!loading && activeTab === 'collections' && !currentCollectionId && (
             <div className="animate-in fade-in duration-200">
               <div className="flex items-center justify-between mb-5">
                 <span className="text-sm text-muted-foreground font-medium">
                   {collections.length} collection{collections.length !== 1 ? 's' : ''}
                 </span>
-                {isAuthenticated && (
+                {canManageContent && (
                   <button
                     onClick={() => setShowCreateCollection(true)}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium"
@@ -401,6 +529,7 @@ export function DatabaseView() {
                   {collections.map(collection => (
                     <div
                       key={collection.id}
+                      onClick={() => { setCurrentCollectionId(collection.id); setCurrentCollectionFolderId(null); }}
                       className="border border-border rounded-xl bg-card p-6 hover:shadow-md transition-all cursor-pointer group hover:border-[#9481ff]/40"
                     >
                       <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4" style={{ backgroundColor: '#f8f7ff' }}>
@@ -481,6 +610,196 @@ export function DatabaseView() {
             </div>
           )}
 
+          {/* ─── COLLECTION FOLDER VIEW ─── */}
+          {!loading && activeTab === 'collections' && currentCollectionId && (
+            <div className="animate-in fade-in duration-200">
+              <div className="flex items-center justify-between mb-5">
+                <div>
+                  <h3 className="font-semibold mb-1">{currentCollection?.name}</h3>
+                  <p className="text-muted-foreground text-sm">Browse folders and samples in this collection.</p>
+                </div>
+                {canManageContent && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowCreateFolder(true)}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium"
+                      style={{ backgroundColor: '#9481ff' }}
+                    >
+                      <Plus size={14} />
+                      New Folder
+                    </button>
+                    <button
+                      onClick={() => navigate(`/upload?folderId=${currentCollectionFolderId || ''}&collectionId=${currentCollectionId}`)}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium"
+                      style={{ backgroundColor: '#9481ff' }}
+                    >
+                      <UploadCloud size={14} />
+                      Upload Sample
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Collection Breadcrumbs */}
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-5 bg-card border border-border px-4 py-2.5 rounded-xl overflow-x-auto">
+                <button
+                  onClick={() => setCurrentCollectionId(null)}
+                  className="hover:text-[#9481ff] transition-colors whitespace-nowrap"
+                >
+                  Collections
+                </button>
+                <ChevronRight size={14} />
+                <button
+                  onClick={() => setCurrentCollectionFolderId(null)}
+                  className={`hover:text-[#9481ff] transition-colors whitespace-nowrap ${!currentCollectionFolderId ? 'font-medium text-foreground' : ''}`}
+                >
+                  {currentCollection?.name}
+                </button>
+                {collectionBreadcrumbs.map(crumb => (
+                  <div key={crumb.id} className="flex items-center gap-2 shrink-0">
+                    <ChevronRight size={14} />
+                    <button
+                      onClick={() => setCurrentCollectionFolderId(crumb.id)}
+                      className={`hover:text-[#9481ff] transition-colors whitespace-nowrap ${currentCollectionFolderId === crumb.id ? 'font-medium text-foreground' : ''}`}
+                    >
+                      {crumb.name}
+                    </button>
+                  </div>
+                ))}
+                {currentCollectionFolderId && (
+                  <button
+                    onClick={() => setCurrentCollectionFolderId(collectionBreadcrumbs[collectionBreadcrumbs.length - 2]?.id || null)}
+                    className="ml-auto flex items-center gap-1.5 text-xs bg-muted hover:bg-border px-2 py-1 rounded-md transition-colors shrink-0"
+                  >
+                    <ArrowLeft size={12} />
+                    Up
+                  </button>
+                )}
+              </div>
+
+              {displayedCollectionFolders.length === 0 && displayedCollectionSamples.length === 0 ? (
+                <div className="border-2 border-dashed border-border rounded-2xl p-12 text-center">
+                  <div className="w-16 h-16 rounded-full mx-auto flex items-center justify-center mb-4" style={{ backgroundColor: '#f8f7ff' }}>
+                    <Folder size={32} style={{ color: '#9481ff' }} />
+                  </div>
+                  <h3 className="font-semibold mb-2">Empty collection</h3>
+                  <p className="text-muted-foreground max-w-sm mx-auto mb-6 text-sm">
+                    Add folders and upload samples to populate this collection.
+                  </p>
+                  {canManageContent && (
+                    <div className="flex gap-2 justify-center">
+                      <button
+                        onClick={() => setShowCreateFolder(true)}
+                        className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-white"
+                        style={{ backgroundColor: '#9481ff' }}
+                      >
+                        <Plus size={16} />
+                        Create Folder
+                      </button>
+                      <button
+                        onClick={() => navigate(`/upload?folderId=${currentCollectionFolderId || ''}&collectionId=${currentCollectionId}`)}
+                        className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-white"
+                        style={{ backgroundColor: '#9481ff' }}
+                      >
+                        <UploadCloud size={16} />
+                        Upload Sample
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {displayedCollectionFolders.map(folder => (
+                    <div
+                      key={folder.id}
+                      onClick={() => setCurrentCollectionFolderId(folder.id)}
+                      className="border border-border rounded-xl bg-card p-4 hover:shadow-md transition-all cursor-pointer hover:border-[#9481ff]/50 flex items-center gap-3"
+                    >
+                      <div className="w-11 h-11 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: '#f8f7ff' }}>
+                        <Folder size={22} fill="#e5e0ff" stroke="#9481ff" />
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="font-medium truncate text-sm">{folder.name}</h4>
+                        {folder.description && (
+                          <p className="text-xs text-muted-foreground mt-0.5 truncate">{folder.description}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  {displayedCollectionSamples.map(sample => (
+                    <SampleCard
+                      key={sample.id}
+                      sample={sample}
+                      fileTypeBadge={getFileTypeBadge(sample)}
+                      onClick={() => navigate(`/sample/${sample.id}`)}
+                      isSelected={selectedSamples.has(sample.id)}
+                      onToggleSelection={() => toggleSelection(sample.id)}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/* Create Folder Modal */}
+              {showCreateFolder && (
+                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+                  <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-md shadow-xl">
+                    <div className="flex items-center justify-between mb-5">
+                      <h3 className="font-bold">New Folder</h3>
+                      <button onClick={() => setShowCreateFolder(false)}>
+                        <X size={20} className="text-muted-foreground" />
+                      </button>
+                    </div>
+                    <form onSubmit={handleCreateFolder} className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-1.5">Name <span className="text-red-500">*</span></label>
+                        <input
+                          type="text"
+                          value={newFolderName}
+                          onChange={e => setNewFolderName(e.target.value)}
+                          placeholder="e.g., Patient Records"
+                          className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1.5">Description</label>
+                        <textarea
+                          value={newFolderDesc}
+                          onChange={e => setNewFolderDesc(e.target.value)}
+                          placeholder="Optional description..."
+                          className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40 min-h-20"
+                        />
+                      </div>
+                      {createFolderError && (
+                        <p className="text-sm text-red-600 flex items-center gap-1">
+                          <AlertCircle size={13} /> {createFolderError}
+                        </p>
+                      )}
+                      <div className="flex gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setShowCreateFolder(false)}
+                          className="flex-1 px-4 py-2.5 border border-border rounded-lg hover:bg-muted transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={createFolderLoading}
+                          className="flex-1 px-4 py-2.5 rounded-lg text-white font-medium disabled:opacity-60"
+                          style={{ backgroundColor: '#9481ff' }}
+                        >
+                          {createFolderLoading ? 'Creating...' : 'Create'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ─── GROUPS ─── */}
           {!loading && activeTab === 'groups' && (
             <div className="animate-in fade-in duration-200">
@@ -544,14 +863,26 @@ export function DatabaseView() {
                   <h3 className="font-semibold mb-1">My Workspace</h3>
                   <p className="text-muted-foreground text-sm">Manage your personal samples and folders.</p>
                 </div>
-                <button
-                  onClick={() => navigate('/upload')}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium"
-                  style={{ backgroundColor: '#9481ff' }}
-                >
-                  <UploadCloud size={14} />
-                  Upload Sample
-                </button>
+                {canManageContent && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowCreateFolder(true)}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium"
+                      style={{ backgroundColor: '#9481ff' }}
+                    >
+                      <Plus size={14} />
+                      New Folder
+                    </button>
+                    <button
+                      onClick={() => navigate(`/upload?folderId=${currentFolderId || ''}`)}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium"
+                      style={{ backgroundColor: '#9481ff' }}
+                    >
+                      <UploadCloud size={14} />
+                      Upload Sample
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Breadcrumbs */}
@@ -593,14 +924,16 @@ export function DatabaseView() {
                   <p className="text-muted-foreground max-w-sm mx-auto mb-6 text-sm">
                     Upload samples to populate your workspace.
                   </p>
-                  <button
-                    onClick={() => navigate('/upload')}
-                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-white"
-                    style={{ backgroundColor: '#9481ff' }}
-                  >
-                    <Plus size={16} />
-                    Upload Sample
-                  </button>
+                  {canManageContent && (
+                    <button
+                      onClick={() => navigate('/upload')}
+                      className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-white"
+                      style={{ backgroundColor: '#9481ff' }}
+                    >
+                      <Plus size={16} />
+                      Upload Sample
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -632,6 +965,64 @@ export function DatabaseView() {
                       onToggleSelection={() => toggleSelection(sample.id)}
                     />
                   ))}
+                </div>
+              )}
+
+              {/* Create Folder Modal for My Workspace */}
+              {showCreateFolder && activeTab === 'my-collection' && (
+                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+                  <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-md shadow-xl">
+                    <div className="flex items-center justify-between mb-5">
+                      <h3 className="font-bold">New Folder</h3>
+                      <button onClick={() => setShowCreateFolder(false)}>
+                        <X size={20} className="text-muted-foreground" />
+                      </button>
+                    </div>
+                    <form onSubmit={handleCreateFolder} className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-1.5">Name <span className="text-red-500">*</span></label>
+                        <input
+                          type="text"
+                          value={newFolderName}
+                          onChange={e => setNewFolderName(e.target.value)}
+                          placeholder="e.g., Patient Records"
+                          className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1.5">Description</label>
+                        <textarea
+                          value={newFolderDesc}
+                          onChange={e => setNewFolderDesc(e.target.value)}
+                          placeholder="Optional description..."
+                          className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40 min-h-20"
+                        />
+                      </div>
+                      {createFolderError && (
+                        <p className="text-sm text-red-600 flex items-center gap-1">
+                          <AlertCircle size={13} /> {createFolderError}
+                        </p>
+                      )}
+                      <div className="flex gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setShowCreateFolder(false)}
+                          className="flex-1 px-4 py-2.5 border border-border rounded-lg hover:bg-muted transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={createFolderLoading}
+                          className="flex-1 px-4 py-2.5 rounded-lg text-white font-medium disabled:opacity-60"
+                          style={{ backgroundColor: '#9481ff' }}
+                        >
+                          {createFolderLoading ? 'Creating...' : 'Create'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
                 </div>
               )}
             </div>

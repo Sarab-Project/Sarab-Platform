@@ -25,6 +25,7 @@ const ROLE_COLORS: Record<number, { bg: string; text: string }> = {
 
 export function Groups() {
   const { user, isAuthenticated } = useAuth();
+  const canCreateGroup = user?.role === 'Admin' || user?.role === 'Contributor';
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [loading, setLoading] = useState(true);
@@ -165,7 +166,7 @@ export function Groups() {
               </div>
             )}
           </div>
-          {!selectedGroup && isAuthenticated && (
+          {!selectedGroup && canCreateGroup && (
             <button
               onClick={() => setShowCreateForm(true)}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-white font-medium transition-colors"
@@ -260,7 +261,7 @@ export function Groups() {
                 <Users size={48} className="mx-auto text-muted-foreground mb-4 opacity-40" />
                 <h3 className="font-semibold mb-2">No groups yet</h3>
                 <p className="text-muted-foreground mb-6">Create a group to collaborate with other researchers.</p>
-                {isAuthenticated && (
+                {canCreateGroup && (
                   <button
                     onClick={() => setShowCreateForm(true)}
                     className="px-6 py-3 rounded-xl font-medium text-white"

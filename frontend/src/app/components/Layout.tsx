@@ -1,6 +1,7 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { LogOut, User, Upload, Database, Shield, Info, Users } from 'lucide-react';
+import { ThemeToggle } from './ui/theme-toggle';
 
 export function Layout() {
   const { user, isAuthenticated, logout, isLoading } = useAuth();
@@ -13,7 +14,9 @@ export function Layout() {
   };
 
   const isActive = (path: string) =>
-    location.pathname === path ? 'text-[#9481ff] font-medium' : 'text-foreground hover:text-[#9481ff]';
+    location.pathname === path
+      ? 'text-primary font-medium bg-primary/10 dark:bg-primary/20 shadow-sm'
+      : 'text-foreground hover:text-primary';
 
   const roleLabel = user?.role || '';
 
@@ -30,7 +33,7 @@ export function Layout() {
                   <circle cx="10" cy="10" r="3" fill="white" />
                 </svg>
               </div>
-              <span className="text-xl tracking-tight font-semibold" style={{ color: '#9481ff' }}>Sarab</span>
+              <span className="text-xl tracking-tight font-semibold text-[#9481ff]">Sarab</span>
             </Link>
 
             {isAuthenticated && (
@@ -71,20 +74,20 @@ export function Layout() {
 
           {/* Right side */}
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             {isLoading ? (
-              <div className="w-8 h-8 rounded-full border-2 border-[#b8b8fe] border-t-[#9481ff] animate-spin" />
+              <div className="w-8 h-8 rounded-full border-2 border-primary-light border-t-primary animate-spin" />
             ) : isAuthenticated && user ? (
               <>
                 <Link to="/profile" className="flex items-center gap-2.5 group">
                   <div className="text-right hidden sm:block">
-                    <div className="text-sm font-medium group-hover:text-[#9481ff] transition-colors">
+                    <div className="text-sm font-medium group-hover:text-primary transition-colors">
                       {user.firstName} {user.lastName}
                     </div>
                     <div className="text-xs text-muted-foreground">{roleLabel}</div>
                   </div>
                   <div
-                    className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold text-white"
-                    style={{ backgroundColor: '#9481ff' }}
+                    className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold text-white bg-[#9481ff]"
                   >
                     {user.firstName?.[0]?.toUpperCase() || 'U'}
                   </div>
@@ -107,8 +110,7 @@ export function Layout() {
                 </Link>
                 <Link
                   to="/signin"
-                  className="px-4 py-2 text-sm rounded-lg transition-colors text-white"
-                  style={{ backgroundColor: '#9481ff' }}
+                  className="px-4 py-2 text-sm rounded-lg transition-colors text-primary-foreground bg-primary hover:bg-primary/90"
                 >
                   Sign In
                 </Link>

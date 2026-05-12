@@ -34,18 +34,26 @@ namespace SarabPlatform.Controllers
             if (existingUser != null)
                 return Conflict(new { message = "Email is already registered" });
 
+            if (!System.Enum.TryParse<UserRole>(dto.Role, true, out var parsedRole) || parsedRole == UserRole.Admin)
+            {
+                return BadRequest(new { message = "Role must be Researcher or Contributor" });
+            }
+
             var user = new User
             {
                 FirstName = dto.FirstName,
                 LastName = dto.LastName,
                 Email = dto.Email,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
-                Role = UserRole.Researcher,
+                Role = parsedRole,
                 CreatedAt = DateTime.UtcNow,
                 IsActive = true
             };
 
             _context.Users.Add(user);
+            await _context.SaveChangesAsync();
+
+            CreateDefaultCollectionsForUser(user);
             await _context.SaveChangesAsync();
 
             var response = new AuthResponseDto
@@ -63,6 +71,32 @@ namespace SarabPlatform.Controllers
             };
 
             return CreatedAtAction(null, response);
+        }
+
+        private void CreateDefaultCollectionsForUser(User user)
+        {
+            _context.Collections.AddRange(
+                new Collection
+                {
+                    Name = "Private",
+                    Description = "Private collection for this user",
+                    CreatedBy = user.Id,
+                    OwnerId = user.Id,
+                    OwnerType = OwnerType.User,
+                    TemplateId = 0,
+                    CreatedAt = DateTime.UtcNow
+                },
+                new Collection
+                {
+                    Name = "Public",
+                    Description = "Public collection visible to all users",
+                    CreatedBy = user.Id,
+                    OwnerId = user.Id,
+                    OwnerType = OwnerType.User,
+                    TemplateId = 0,
+                    CreatedAt = DateTime.UtcNow
+                }
+            );
         }
 
         [HttpPost("login")]
