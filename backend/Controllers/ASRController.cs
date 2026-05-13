@@ -15,81 +15,8 @@ namespace SarabPlatform.Controllers
         public ASRController(IHttpClientFactory httpClientFactory)
         {
         _httpClientFactory = httpClientFactory;
-        // إعداد المسار مرة واحدة عند تشغيل الـ Controller
         FFmpeg.SetExecutablesPath(_ffmpegPath);
         }
-
-        // [HttpPost]
-        // public async Task<IActionResult> ProcessVoice([FromForm] IFormFile AudioFile)
-        // {
-        //     if (AudioFile == null || AudioFile.Length == 0)
-        //         return BadRequest(new { message = "الملف الصوتي مفقود" });
-
-        //     // رابط الخدمة الخارجية التي تحلل الصوت وتعيد JSON
-        //     string externalAsrServiceUrl = "http://25.9.129.103:8000";
-
-        //     var client = _httpClientFactory.CreateClient();
-
-        //     using var content = new MultipartFormDataContent();
-        //     using var stream = AudioFile.OpenReadStream();
-        //     var fileContent = new StreamContent(stream);
-            
-        //     // تمرير الـ Content-Type الأصلي للملف (مثلاً audio/m4a)
-        //     fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(AudioFile.ContentType);
-
-        //     // إضافة الملف للطلب الموجه للخدمة الخارجية
-        //     content.Add(fileContent, "audio", AudioFile.FileName); 
-
-        //     try
-        //     {
-        //         // إرسال الملف وانتظار الـ JSON من خدمة الـ AI
-        //         var response = await client.PostAsync(externalAsrServiceUrl, content);
-                
-        //         // قراءة الـ JSON الناتج (مثال: { "age": 25, "gender": "male" ... })
-        //         var jsonResponse = await response.Content.ReadAsStringAsync();
-
-        //         if (response.IsSuccessStatusCode)
-        //         {
-        //             // إرسال الـ JSON مباشرة للموبايل بصيغة application/json
-        //             return Content(jsonResponse, "application/json");
-        //         }
-
-        //         return StatusCode((int)response.StatusCode, jsonResponse);
-        //     }
-        //     catch (Exception ex)
-        //     {
-        //         return StatusCode(500, new { message = "خطأ في الاتصال بخدمة الـ AI", details = ex.Message });
-        //     }
-        // }
-
-
-        // [HttpPost]
-        // // [ApiExplorerSettings(IgnoreApi = true)]
-        // [Consumes("multipart/form-data")]
-        // public async Task<IActionResult> ProcessVoice([FromForm] ASRDto AudioFile)
-        // {
-        //     // سنقوم بتعطيل الاتصال الخارجي مؤقتاً للاختبار
-        //     // 1. نتأكد فقط أن الملف وصل للسيرفر
-        //     if (AudioFile == null || AudioFile.AudioFile.Length == 0)
-        //         return BadRequest(new { message = "الملف لم يصل للسيرفر" });
-
-        //     // 2. محاكاة تأخير بسيط (وكأن السيرفر يعالج الصوت)
-        //     await Task.Delay(1500); 
-
-        //     // 3. إعادة JSON وهمي بنفس الصيغة التي يتوقعها الموبايل
-        //     var mockResult = new {
-        //         Eyeside = "Right",
-        //         Gender = "Male",
-        //         Age = "25",
-        //         City = "Damascus",
-        //         Status = "Single",
-        //         Profession = "Software Developer",
-        //         Notes = "تم استلام الصوت بنجاح وهذا رد وهمي للاختبار"
-        //     };
-
-        //     return Ok(mockResult);
-        // }
-
 
 
 
