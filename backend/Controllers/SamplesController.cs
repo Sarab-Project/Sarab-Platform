@@ -7,6 +7,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SarabPlatform.Services;
 using System.IO.Compression;
+using System.Net.Http.Headers;
 
 namespace SarabPlatform.Controllers
 {
@@ -16,11 +17,15 @@ namespace SarabPlatform.Controllers
     {
         private readonly AppDbContext _context;
         private readonly FileService _fileService;
+        
+        private readonly IHttpClientFactory _httpClientFactory;
 
-        public SamplesController(AppDbContext context, FileService fileService)
+        public SamplesController(AppDbContext context, FileService fileService, IHttpClientFactory httpClientFactory)
         {
             _context = context;
             _fileService = fileService;
+            _httpClientFactory = httpClientFactory;
+
         }
 
         private IQueryable<Sample> GetActiveSamplesQuery()
@@ -57,71 +62,153 @@ namespace SarabPlatform.Controllers
             }
         }
 
-        [HttpPost("upload/sarab-ai")]
-        public async Task<IActionResult> UploadSampleSarabAi([FromForm] UploadSampleSarabAiDto dto)
+    [HttpPost("upload/sarab-ai")]
+    public async Task<IActionResult> UploadSampleSarabAi([FromForm] UploadSampleSarabAiDto dto)
+    {
+        if (dto.Videos == null || dto.Videos.Count < 2)
+            return BadRequest(new { message = "يجب رفع فيديوهين على الأقل (يسار-يمين ويمين-يسار)." });
+
+        var metadataObject = new
         {
-            if (dto.Videos == null || dto.Videos.Count == 0)
-                return BadRequest(new { message = "At least one video is required." });
+            EyeSide = dto.EyeSide,
+            Gender = dto.Gender,
+            Age = dto.Age,
+            City = dto.City,
+            Status = dto.Status,
+            Profession = dto.Profession,
+            Notes = dto.Notes
+        };
 
-            var metadataObject = new
+        var sample = new Sample
+        {
+            Title = "Sarab-Ai Analysis " + DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
+            Age = dto.Age,
+            Gender = dto.Gender,
+            City = dto.City ?? string.Empty,        
+            Status = dto.Status ?? string.Empty,    
+            Notes = dto.Notes ?? string.Empty,      
+            Metadata = JsonSerializer.Serialize(metadataObject),
+            CreatedAt = DateTime.UtcNow,
+            Files = new List<ResourceFile>()
+        };
+
+        _context.Samples.Add(sample);
+        await _context.SaveChangesAsync();
+
+        var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "Uploads", $"sample-{sample.Id}");
+        if (!Directory.Exists(uploadPath)) Directory.CreateDirectory(uploadPath);
+
+        var streamsToDispose = new List<Stream>();
+
+        try
+        {
+            using var multipartContent = new MultipartFormDataContent();
+
+            for (int i = 0; i < dto.Videos.Count; i++)
             {
-                EyeSide = dto.EyeSide,
-                Gender = dto.Gender,
-                Age = dto.Age,
-                City = dto.City,
-                Status = dto.Status,
-                Profession = dto.Profession,
-                Notes = dto.Notes
-            };
-            var metadataJson = JsonSerializer.Serialize(metadataObject);
-
-            var sample = new Sample
-            {
-                Title = "Sarab-Ai",
-                Metadata = metadataJson,
-                Gender = dto.Gender,
-                Age = dto.Age,
-                City = dto.City ?? string.Empty,
-                Status = dto.Status ?? string.Empty,
-                Notes = dto.Notes ?? string.Empty,
-                Files = new List<ResourceFile>()
-            };
-
-            _context.Samples.Add(sample);
-            await _context.SaveChangesAsync();
-
-            var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "Uploads", $"sample-{sample.Id}");
-            Directory.CreateDirectory(uploadPath);
-
-            foreach (var file in dto.Videos)
-            {
-                var fileName = Guid.NewGuid() + Path.GetExtension(file.FileName);
-                var filePath = Path.Combine(uploadPath, fileName);
+                var file = dto.Videos[i];
+                string targetFileName = (i == 0) ? "left2right.mp4" : "right2left.mp4";
+                string fieldName = (i == 0) ? "left2right" : "right2left";
+                var filePath = Path.Combine(uploadPath, targetFileName);
 
                 using (var stream = new FileStream(filePath, FileMode.Create))
                 {
                     await file.CopyToAsync(stream);
                 }
 
-                var resourceFile = new ResourceFile
-                {
-                    FileName = fileName,
-                    FileType = FileType.Video,
-                    FilePath = filePath,
-                    Size = (int)file.Length,
-                    UploadedBy = 0,
-                    UploadedAt = DateTime.UtcNow,
-                    SampleId = sample.Id
-                };
+                var fileStreamForUpload = new FileStream(filePath, FileMode.Open, FileAccess.Read);
+                streamsToDispose.Add(fileStreamForUpload); 
 
-                sample.Files.Add(resourceFile);
-                _context.Files.Add(resourceFile);
+                var fileContent = new StreamContent(fileStreamForUpload);
+                fileContent.Headers.ContentType = new MediaTypeHeaderValue("video/mp4");
+                
+                multipartContent.Add(fileContent, fieldName, targetFileName);
+
+                _context.Files.Add(new ResourceFile {
+                    FileName = targetFileName,
+                    FilePath = filePath,
+                    SampleId = sample.Id,
+                    FileType = FileType.Video
+                });
             }
 
-            await _context.SaveChangesAsync();
+            var client = _httpClientFactory.CreateClient();
+            client.Timeout = TimeSpan.FromMinutes(15); 
 
-            return CreatedAtAction(nameof(GetSample), new { Id = sample.Id }, sample);
+            string visionApiUrl = "http://25.9.129.103:8000/api/Samples/maps";
+            var response = await client.PostAsync(visionApiUrl, multipartContent);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var resultJson = await response.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var result = JsonSerializer.Deserialize<VisionServiceResponse>(resultJson, options);
+
+                if (result?.maps != null)
+                {
+                    await SaveBase64File(result.maps.fullMap, "merged_heatmap.png", uploadPath, sample.Id);
+                    await SaveBase64File(result.maps.left2right, "heatmap_lr.png", uploadPath, sample.Id);
+                    await SaveBase64File(result.maps.right2left, "heatmap_rl.png", uploadPath, sample.Id);
+                }
+
+                if (result?.trackingVideos != null)
+                {
+                    await SaveBase64File(result.trackingVideos.left2right, "tracked_lr.mkv", uploadPath, sample.Id);
+                    await SaveBase64File(result.trackingVideos.right2left, "tracked_rl.mkv", uploadPath, sample.Id);
+                }
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new { 
+                    sampleId = sample.Id, 
+                    message = "تمت المعالجة بنجاح واستلام النتائج.",
+                    results = result 
+                });
+            }
+            else
+            {
+                var errorMsg = await response.Content.ReadAsStringAsync();
+                return StatusCode((int)response.StatusCode, new { message = "فشلت خدمة المعالجة في بايثون", details = errorMsg });
+            }
         }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "خطأ أثناء التواصل مع خدمة الـ AI", error = ex.Message });
+        }
+        finally
+        {
+            foreach (var s in streamsToDispose)
+            {
+                await s.DisposeAsync();
+            }
+        }
+    }
+
+    private async Task SaveBase64File(string base64Data, string fileName, string path, int sampleId)
+    {
+        if (string.IsNullOrEmpty(base64Data)) return;
+
+        try 
+        {
+            string cleanBase64 = base64Data.Contains(",") ? base64Data.Split(',')[1] : base64Data;
+            var bytes = Convert.FromBase64String(cleanBase64);
+            
+            var filePath = Path.Combine(path, fileName);
+            await System.IO.File.WriteAllBytesAsync(filePath, bytes);
+
+            _context.Files.Add(new ResourceFile {
+                FileName = fileName,
+                FilePath = filePath,
+                SampleId = sampleId,
+                FileType = fileName.EndsWith(".png") ? FileType.Image : FileType.Video  // ✅ fixed
+            });
+        }
+        catch (Exception)
+        {
+            
+        }
+    }
+
 
         [HttpPost("upload")]
         public async Task<IActionResult> UploadSample([FromForm] CreateSampleDto dto)
@@ -135,10 +222,10 @@ namespace SarabPlatform.Controllers
                 EyeSide = dto.EyeSide,
                 Gender = dto.Gender,
                 Age = dto.Age,
-                city = dto.City,
+                City = dto.City,
                 Status = dto.Status,
-                profession = dto.Profession,
-                notes = dto.Notes
+                Profession = dto.Profession,
+                Notes = dto.Notes
             };
 
             var metadataJson = JsonSerializer.Serialize(metadataObject);
@@ -583,8 +670,25 @@ namespace SarabPlatform.Controllers
                 return StatusCode(500, new { message = "Error occurred while searching samples", error = ex.Message });
             }
         }
+
+       public class VisionServiceResponse
+        {
+            public TrackingVideos? trackingVideos { get; set; }
+            public Maps? maps { get; set; }
+        }
+
+        public class TrackingVideos
+        {
+            public string? left2right { get; set; }
+            public string? right2left { get; set; }
+        }
+
+        public class Maps
+        {
+            public string? left2right { get; set; }
+            public string? right2left { get; set; }
+            public string? fullMap { get; set; }
+        }
     
     }
 }
-
-

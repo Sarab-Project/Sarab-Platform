@@ -16,10 +16,10 @@ namespace SarabPlatform.Models
         public string? Metadata { get; set; }
         public string? Gender { get; set; }
         public int Age { get; set; }
-        public string City { get; set; }
-        public string Status { get; set; }
-        public string Notes { get; set; }
-        public List<ResourceFile> Files { get; set; }
+        public string? City { get; set; }
+        public string? Status { get; set; }
+        public string? Notes { get; set; }
+        public List<ResourceFile> Files { get; set; } = new();
         public List<Tag> Tags { get; set; } = new();
         public bool IsDeleted { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

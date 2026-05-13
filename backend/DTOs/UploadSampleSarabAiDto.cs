@@ -9,6 +9,6 @@ namespace SarabPlatform.Dto
         public string? Status { get; set; }
         public string? Profession { get; set; }
         public string? Notes { get; set; }
-        public List<IFormFile> Videos { get; set; }
+        public List<IFormFile>? Videos { get; set; } = new();
     }
 }
