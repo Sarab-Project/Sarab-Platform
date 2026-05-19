@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using SarabPlatform.Services;
 using System.IO.Compression;
 using System.Net.Http.Headers;
+using Xabe.FFmpeg;
 
 namespace SarabPlatform.Controllers
 {
@@ -62,152 +63,203 @@ namespace SarabPlatform.Controllers
             }
         }
 
-    [HttpPost("upload/sarab-ai")]
-    public async Task<IActionResult> UploadSampleSarabAi([FromForm] UploadSampleSarabAiDto dto)
-    {
-        if (dto.Videos == null || dto.Videos.Count < 2)
-            return BadRequest(new { message = "يجب رفع فيديوهين على الأقل (يسار-يمين ويمين-يسار)." });
-
-        var metadataObject = new
+        [HttpPost("upload/sarab-ai")]
+        public async Task<IActionResult> UploadSampleSarabAi([FromForm] UploadSampleSarabAiDto dto)
         {
-            EyeSide = dto.EyeSide,
-            Gender = dto.Gender,
-            Age = dto.Age,
-            City = dto.City,
-            Status = dto.Status,
-            Profession = dto.Profession,
-            Notes = dto.Notes
-        };
+            if (dto.Videos == null || dto.Videos.Count < 2)
+                return BadRequest(new { message = "يجب رفع فيديوهين على الأقل (يسار-يمين ويمين-يسار)." });
 
-        var sample = new Sample
-        {
-            Title = "Sarab-Ai Analysis " + DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
-            Age = dto.Age,
-            Gender = dto.Gender,
-            City = dto.City ?? string.Empty,        
-            Status = dto.Status ?? string.Empty,    
-            Notes = dto.Notes ?? string.Empty,      
-            Metadata = JsonSerializer.Serialize(metadataObject),
-            CreatedAt = DateTime.UtcNow,
-            Files = new List<ResourceFile>()
-        };
-
-        _context.Samples.Add(sample);
-        await _context.SaveChangesAsync();
-
-        var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "Uploads", $"sample-{sample.Id}");
-        if (!Directory.Exists(uploadPath)) Directory.CreateDirectory(uploadPath);
-
-        var streamsToDispose = new List<Stream>();
-
-        try
-        {
-            using var multipartContent = new MultipartFormDataContent();
-
-            for (int i = 0; i < dto.Videos.Count; i++)
+            var metadataObject = new
             {
-                var file = dto.Videos[i];
-                string targetFileName = (i == 0) ? "left2right.mp4" : "right2left.mp4";
-                string fieldName = (i == 0) ? "left2right" : "right2left";
-                var filePath = Path.Combine(uploadPath, targetFileName);
+                EyeSide = dto.EyeSide,
+                Gender = dto.Gender,
+                Age = dto.Age,
+                City = dto.City,
+                Status = dto.Status,
+                Profession = dto.Profession,
+                Notes = dto.Notes
+            };
 
-                using (var stream = new FileStream(filePath, FileMode.Create))
+            var sample = new Sample
+            {
+                Title = "Sarab-Ai Analysis " + DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
+                Age = dto.Age,
+                Gender = dto.Gender,
+                City = dto.City ?? string.Empty,
+                Status = dto.Status ?? string.Empty,
+                Notes = dto.Notes ?? string.Empty,
+                Metadata = JsonSerializer.Serialize(metadataObject),
+                CreatedAt = DateTime.UtcNow,
+                Files = new List<ResourceFile>()
+            };
+
+            _context.Samples.Add(sample);
+            await _context.SaveChangesAsync();
+
+            var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "Uploads", $"sample-{sample.Id}");
+            if (!Directory.Exists(uploadPath)) Directory.CreateDirectory(uploadPath);
+
+            var streamsToDispose = new List<Stream>();
+
+            try
+            {
+                using var multipartContent = new MultipartFormDataContent();
+
+                for (int i = 0; i < dto.Videos.Count; i++)
                 {
-                    await file.CopyToAsync(stream);
+                    var file = dto.Videos[i];
+                    string targetFileName = (i == 0) ? "left2right.mp4" : "right2left.mp4";
+                    string fieldName = (i == 0) ? "left2right" : "right2left";
+                    var filePath = Path.Combine(uploadPath, targetFileName);
+
+                    using (var stream = new FileStream(filePath, FileMode.Create))
+                    {
+                        await file.CopyToAsync(stream);
+                    }
+
+                    var fileStreamForUpload = new FileStream(filePath, FileMode.Open, FileAccess.Read);
+                    streamsToDispose.Add(fileStreamForUpload);
+
+                    var fileContent = new StreamContent(fileStreamForUpload);
+                    fileContent.Headers.ContentType = new MediaTypeHeaderValue("video/mp4");
+
+                    multipartContent.Add(fileContent, fieldName, targetFileName);
+
+                    _context.Files.Add(new ResourceFile
+                    {
+                        FileName = targetFileName,
+                        FilePath = filePath,
+                        SampleId = sample.Id,
+                        FileType = FileType.Video
+                    });
                 }
 
-                var fileStreamForUpload = new FileStream(filePath, FileMode.Open, FileAccess.Read);
-                streamsToDispose.Add(fileStreamForUpload); 
+                var client = _httpClientFactory.CreateClient();
+                client.Timeout = TimeSpan.FromMinutes(15);
 
-                var fileContent = new StreamContent(fileStreamForUpload);
-                fileContent.Headers.ContentType = new MediaTypeHeaderValue("video/mp4");
-                
-                multipartContent.Add(fileContent, fieldName, targetFileName);
+                string visionApiUrl = "http://25.9.129.103:8000/api/Samples/maps";
+                var response = await client.PostAsync(visionApiUrl, multipartContent);
 
-                _context.Files.Add(new ResourceFile {
-                    FileName = targetFileName,
-                    FilePath = filePath,
-                    SampleId = sample.Id,
+                if (response.IsSuccessStatusCode)
+                {
+                    var resultJson = await response.Content.ReadAsStringAsync();
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var result = JsonSerializer.Deserialize<VisionServiceResponse>(resultJson, options);
+
+                    if (result?.maps != null)
+                    {
+                        await SaveBase64File(result.maps.fullMap, "merged_heatmap.png", uploadPath, sample.Id);
+                        await SaveBase64File(result.maps.left2right, "heatmap_lr.png", uploadPath, sample.Id);
+                        await SaveBase64File(result.maps.right2left, "heatmap_rl.png", uploadPath, sample.Id);
+                    }
+
+                    // --- معالجة وتحويل فيديوهات التتبع ---
+                    if (result?.trackingVideos != null)
+                    {
+                        // تحويل الفيديو الأول
+                        if (!string.IsNullOrEmpty(result.trackingVideos.left2right))
+                        {
+                            var converted = await ProcessAndConvertVideo(result.trackingVideos.left2right, "tracked_lr", uploadPath, sample.Id);
+                            result.trackingVideos.left2right = converted; // تحديث الـ Base64 ليرسل للموبايل بصيغة mp4
+                        }
+
+                        // تحويل الفيديو الثاني
+                        if (!string.IsNullOrEmpty(result.trackingVideos.right2left))
+                        {
+                            var converted = await ProcessAndConvertVideo(result.trackingVideos.right2left, "tracked_rl", uploadPath, sample.Id);
+                            result.trackingVideos.right2left = converted; // تحديث الـ Base64 ليرسل للموبايل بصيغة mp4
+                        }
+                    }
+
+                    await _context.SaveChangesAsync();
+
+                    return Ok(new
+                    {
+                        sampleId = sample.Id,
+                        message = "تمت المعالجة والتحويل بنجاح.",
+                        results = result
+                    });
+                }
+                else
+                {
+                    var errorMsg = await response.Content.ReadAsStringAsync();
+                    return StatusCode((int)response.StatusCode, new { message = "فشلت خدمة المعالجة في بايثون", details = errorMsg });
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "خطأ أثناء التواصل مع خدمة الـ AI", error = ex.Message });
+            }
+            finally
+            {
+                foreach (var s in streamsToDispose)
+                {
+                    await s.DisposeAsync();
+                }
+            }
+        }
+
+        private async Task<string> ProcessAndConvertVideo(string base64Data, string fileNameNoExt, string uploadPath, int sampleId)
+        {
+            try
+            {
+                // 1. حفظ ملف الـ MKV الأصلي مؤقتاً
+                string cleanBase64 = base64Data.Contains(",") ? base64Data.Split(',')[1] : base64Data;
+                var bytes = Convert.FromBase64String(cleanBase64);
+                string mkvPath = Path.Combine(uploadPath, fileNameNoExt + ".mkv");
+                string mp4Path = Path.Combine(uploadPath, fileNameNoExt + ".mp4");
+
+                await System.IO.File.WriteAllBytesAsync(mkvPath, bytes);
+
+                // 2. التحويل إلى MP4 (H.264)
+                // ملاحظة: تأكد من أن FFmpeg مثبت على السيرفر ومساره معروف للمكتبة
+                var conversion = await FFmpeg.Conversions.FromSnippet.ToMp4(mkvPath, mp4Path);
+                await conversion.Start();
+
+                // 3. إضافة ملف الـ MP4 لقاعدة البيانات
+                _context.Files.Add(new ResourceFile
+                {
+                    FileName = fileNameNoExt + ".mp4",
+                    FilePath = mp4Path,
+                    SampleId = sampleId,
                     FileType = FileType.Video
                 });
+
+                // 4. إعادة الملف المحول كـ Base64 للموبايل
+                byte[] convertedBytes = await System.IO.File.ReadAllBytesAsync(mp4Path);
+                
+                // حذف ملف الـ mkv لتوفير المساحة (اختياري)
+                if (System.IO.File.Exists(mkvPath)) System.IO.File.Delete(mkvPath);
+
+                return Convert.ToBase64String(convertedBytes);
             }
-
-            var client = _httpClientFactory.CreateClient();
-            client.Timeout = TimeSpan.FromMinutes(15); 
-
-            string visionApiUrl = "http://25.9.129.103:8000/api/Samples/maps";
-            var response = await client.PostAsync(visionApiUrl, multipartContent);
-
-            if (response.IsSuccessStatusCode)
+            catch (Exception ex)
             {
-                var resultJson = await response.Content.ReadAsStringAsync();
-                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                var result = JsonSerializer.Deserialize<VisionServiceResponse>(resultJson, options);
+                Console.WriteLine($"Conversion Error: {ex.Message}");
+                return base64Data; // في حال الفشل نرسل الأصلي كـ fallback
+            }
+        }
 
-                if (result?.maps != null)
+        private async Task SaveBase64File(string base64Data, string fileName, string path, int sampleId)
+        {
+            if (string.IsNullOrEmpty(base64Data)) return;
+            try
+            {
+                string cleanBase64 = base64Data.Contains(",") ? base64Data.Split(',')[1] : base64Data;
+                var bytes = Convert.FromBase64String(cleanBase64);
+                var filePath = Path.Combine(path, fileName);
+                await System.IO.File.WriteAllBytesAsync(filePath, bytes);
+
+                _context.Files.Add(new ResourceFile
                 {
-                    await SaveBase64File(result.maps.fullMap, "merged_heatmap.png", uploadPath, sample.Id);
-                    await SaveBase64File(result.maps.left2right, "heatmap_lr.png", uploadPath, sample.Id);
-                    await SaveBase64File(result.maps.right2left, "heatmap_rl.png", uploadPath, sample.Id);
-                }
-
-                if (result?.trackingVideos != null)
-                {
-                    await SaveBase64File(result.trackingVideos.left2right, "tracked_lr.mkv", uploadPath, sample.Id);
-                    await SaveBase64File(result.trackingVideos.right2left, "tracked_rl.mkv", uploadPath, sample.Id);
-                }
-
-                await _context.SaveChangesAsync();
-
-                return Ok(new { 
-                    sampleId = sample.Id, 
-                    message = "تمت المعالجة بنجاح واستلام النتائج.",
-                    results = result 
+                    FileName = fileName,
+                    FilePath = filePath,
+                    SampleId = sampleId,
+                    FileType = fileName.EndsWith(".png") ? FileType.Image : FileType.Video
                 });
             }
-            else
-            {
-                var errorMsg = await response.Content.ReadAsStringAsync();
-                return StatusCode((int)response.StatusCode, new { message = "فشلت خدمة المعالجة في بايثون", details = errorMsg });
-            }
+            catch { }
         }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { message = "خطأ أثناء التواصل مع خدمة الـ AI", error = ex.Message });
-        }
-        finally
-        {
-            foreach (var s in streamsToDispose)
-            {
-                await s.DisposeAsync();
-            }
-        }
-    }
-
-    private async Task SaveBase64File(string base64Data, string fileName, string path, int sampleId)
-    {
-        if (string.IsNullOrEmpty(base64Data)) return;
-
-        try 
-        {
-            string cleanBase64 = base64Data.Contains(",") ? base64Data.Split(',')[1] : base64Data;
-            var bytes = Convert.FromBase64String(cleanBase64);
-            
-            var filePath = Path.Combine(path, fileName);
-            await System.IO.File.WriteAllBytesAsync(filePath, bytes);
-
-            _context.Files.Add(new ResourceFile {
-                FileName = fileName,
-                FilePath = filePath,
-                SampleId = sampleId,
-                FileType = fileName.EndsWith(".png") ? FileType.Image : FileType.Video  // ✅ fixed
-            });
-        }
-        catch (Exception)
-        {
-            
-        }
-    }
 
 
         [HttpPost("upload")]
