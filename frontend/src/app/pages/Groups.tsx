@@ -25,7 +25,7 @@ const ROLE_COLORS: Record<number, { bg: string; text: string }> = {
 
 export function Groups() {
   const { user, isAuthenticated } = useAuth();
-  const canCreateGroup = user?.role === 'Admin' || user?.role === 'Contributor';
+  const canCreateGroup = user?.role === 'Admin' || user?.role === 'Contributor' || user?.role === 'Researcher';
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [loading, setLoading] = useState(true);

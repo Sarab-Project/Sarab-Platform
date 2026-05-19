@@ -63,6 +63,7 @@ export function MyUploads() {
 
   const totalFiles = samples.reduce((sum, s) => sum + (s.files?.length || 0), 0);
   const totalDownloads = samples.reduce((sum, s) => sum + (s.downloadCount || 0), 0);
+  const totalViews = samples.reduce((sum, s) => sum + (s.viewCount || 0), 0);
 
   return (
     <div className="flex-1 overflow-auto bg-background">
@@ -83,7 +84,7 @@ export function MyUploads() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
           <div className="border border-border rounded-xl bg-card p-4">
             <div className="text-2xl font-bold mb-0.5" style={{ color: '#9481ff' }}>
               {loading ? '—' : samples.length}
@@ -101,6 +102,12 @@ export function MyUploads() {
               {loading ? '—' : totalDownloads}
             </div>
             <div className="text-sm text-muted-foreground">Downloads</div>
+          </div>
+          <div className="border border-border rounded-xl bg-card p-4">
+            <div className="text-2xl font-bold mb-0.5" style={{ color: '#9481ff' }}>
+              {loading ? '—' : totalViews}
+            </div>
+            <div className="text-sm text-muted-foreground">Views</div>
           </div>
           <div className="border border-border rounded-xl bg-card p-4">
             <div className="text-2xl font-bold mb-0.5" style={{ color: '#9481ff' }}>
@@ -149,6 +156,7 @@ export function MyUploads() {
                   <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Condition</th>
                   <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Uploaded</th>
                   <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Downloads</th>
+                  <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Views</th>
                   <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Actions</th>
                 </tr>
               </thead>
@@ -189,6 +197,9 @@ export function MyUploads() {
                     </td>
                     <td className="px-6 py-4 text-sm text-muted-foreground">
                       {sample.downloadCount || 0}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-muted-foreground">
+                      {sample.viewCount || 0}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">

@@ -1,24 +1,32 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import {
-  Folder, Users, Layers, LayoutGrid, Plus, UploadCloud, Search, Filter,
-  ChevronRight, File, ArrowLeft, AlertCircle, Download, Loader, X,
+  Folder, Layers, LayoutGrid, Plus, UploadCloud, Search, Filter,
+  ChevronRight, ChevronUp, ChevronDown, File, ArrowLeft, AlertCircle, Download, Loader, X,
   RefreshCw
 } from 'lucide-react';
 import {
-  fetchSamples, fetchCollections, fetchGroups, fetchFolders,
-  downloadSample, downloadSamples, downloadCollections, createCollection,
+  fetchSamples, fetchCollections, fetchFolders,
+  fetchTags, downloadSample, downloadSamples, downloadCollections, createCollection,
   triggerDownload, searchSamples, createFolder,
   type Sample as ApiSample, type Collection, type Folder as ApiFolder,
-  type Group, type Tag
+  type Tag
 } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
-type TabType = 'flat' | 'collections' | 'groups' | 'my-collection';
+type TabType = 'flat' | 'collections' | 'my-collection';
 
 export function DatabaseView() {
   const [activeTab, setActiveTab] = useState<TabType>('flat');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
+  const [advancedFilters, setAdvancedFilters] = useState({
+    fileTypes: [] as string[],
+    contributorName: '',
+    metadataKey: '',
+    metadataValue: '',
+    selectedTagIds: [] as number[],
+  });
   const [filterGender, setFilterGender] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const navigate = useNavigate();
@@ -28,7 +36,6 @@ export function DatabaseView() {
   // API State
   const [samples, setSamples] = useState<ApiSample[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
-  const [groups, setGroups] = useState<Group[]>([]);
   const [folders, setFolders] = useState<ApiFolder[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,17 +80,15 @@ export function DatabaseView() {
     setLoading(true);
     setError(null);
     try {
-      const [s, c, g, f, t] = await Promise.allSettled([
+      const [s, c, f, t] = await Promise.allSettled([
         fetchSamples(),
         fetchCollections(),
-        fetchGroups(),
         fetchFolders(),
         fetchTags(),
       ]);
       if (s.status === 'fulfilled') setSamples(s.value);
       else if (s.status === 'rejected') setError(s.reason?.message || 'Failed to fetch samples');
       if (c.status === 'fulfilled') setCollections(c.value);
-      if (g.status === 'fulfilled') setGroups(g.value);
       if (f.status === 'fulfilled') setFolders(f.value);
       if (t.status === 'fulfilled') setTags(t.value);
     } finally {
@@ -97,9 +102,17 @@ export function DatabaseView() {
     if (searchTimeout) clearTimeout(searchTimeout);
 
     const trimmed = query.trim();
-    if (trimmed.length === 0) {
+    if (trimmed.length === 0 && !advancedFilters.fileTypes.length && !advancedFilters.contributorName &&
+        !advancedFilters.metadataKey && !advancedFilters.metadataValue) {
       setShowSuggestions(false);
       setSuggestions([]);
+      setIsSearching(true);
+      fetchSamples()
+        .then(all => setSamples(all))
+        .catch(() => {
+          // keep current samples on failure
+        })
+        .finally(() => setIsSearching(false));
       return;
     }
 
@@ -123,9 +136,17 @@ export function DatabaseView() {
 
     const timeout = setTimeout(async () => {
       setIsSearching(true);
-      setShowSuggestions(false);
       try {
-        const results = await searchSamples({ keyword: query, pageSize: 50 });
+        const searchDto: SearchSampleDto = {
+          keyword: trimmed || undefined,
+          fileTypes: advancedFilters.fileTypes.length > 0 ? advancedFilters.fileTypes : undefined,
+          contributorName: advancedFilters.contributorName || undefined,
+          metadataKey: advancedFilters.metadataKey || undefined,
+          metadataValue: advancedFilters.metadataValue || undefined,
+          tagIds: advancedFilters.selectedTagIds.length > 0 ? advancedFilters.selectedTagIds : undefined,
+          pageSize: 50,
+        };
+        const results = await searchSamples(searchDto);
         setSamples(results);
       } catch {
         // Fallback to local filter
@@ -138,6 +159,15 @@ export function DatabaseView() {
 
   const handleClearSearch = async () => {
     setSearchQuery('');
+    setAdvancedFilters({
+      fileTypes: [],
+      contributorName: '',
+      metadataKey: '',
+      metadataValue: '',
+      selectedTagIds: [],
+    });
+    setShowSuggestions(false);
+    setSuggestions([]);
     setIsSearching(true);
     try {
       const all = await fetchSamples();
@@ -147,6 +177,35 @@ export function DatabaseView() {
     } finally {
       setIsSearching(false);
     }
+  };
+
+  const handleAdvancedFilterChange = (key: string, value: any) => {
+    const newFilters = { ...advancedFilters, [key]: value };
+    setAdvancedFilters(newFilters);
+
+    // Trigger search with new filters
+    if (searchTimeout) clearTimeout(searchTimeout);
+    const timeout = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const searchDto: SearchSampleDto = {
+          keyword: searchQuery.trim() || undefined,
+          fileTypes: newFilters.fileTypes.length > 0 ? newFilters.fileTypes : undefined,
+          contributorName: newFilters.contributorName || undefined,
+          metadataKey: newFilters.metadataKey || undefined,
+          metadataValue: newFilters.metadataValue || undefined,
+          tagIds: newFilters.selectedTagIds.length > 0 ? newFilters.selectedTagIds : undefined,
+          pageSize: 50,
+        };
+        const results = await searchSamples(searchDto);
+        setSamples(results);
+      } catch {
+        // Fallback to local filter
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+    setSearchTimeout(timeout);
   };
 
   // Local filter on top of API search
@@ -312,7 +371,7 @@ export function DatabaseView() {
       <div className="border-b border-border bg-card">
         <div className="max-w-7xl mx-auto px-6 py-6">
           <div className="text-center mb-8">
-            <h2 className="mb-2 font-bold" style={{ fontSize: '1.75rem', color: '#9481ff' }}>
+            <h2 className="mb-2 font-bold text-primary" style={{ fontSize: '1.75rem' }}>
               Sarab Research Database
             </h2>
             <p className="text-muted-foreground mb-6">
@@ -326,11 +385,11 @@ export function DatabaseView() {
                   placeholder="Search by title, condition, tags, city, gender, profession, notes..."
                   value={searchQuery}
                   onChange={e => handleSearchChange(e.target.value)}
-                  className="w-full px-5 py-4 pl-12 pr-10 border-2 rounded-xl bg-background shadow-sm focus:outline-none focus:ring-2 focus:ring-[#9481ff]/30 focus:border-[#9481ff] transition-all"
+                  className="w-full px-5 py-4 pl-12 pr-10 border-2 rounded-xl bg-background shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
                   style={{ borderColor: '#b8b8fe' }}
                 />
                 {isSearching ? (
-                  <Loader className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9481ff] animate-spin" size={20} />
+                  <Loader className="absolute left-4 top-1/2 -translate-y-1/2 text-primary animate-spin" size={20} />
                 ) : (
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
                 )}
@@ -363,6 +422,114 @@ export function DatabaseView() {
                   ))}
                 </div>
               )}
+
+              {/* Advanced Search Toggle */}
+              <div className="flex justify-center mt-4">
+                <button
+                  onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Filter size={16} />
+                  Advanced Search
+                  {showAdvancedSearch ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </button>
+              </div>
+
+              {/* Advanced Search Panel */}
+              {showAdvancedSearch && (
+                <div className="mt-4 p-4 bg-card border border-border rounded-lg">
+                  <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                    {/* File Types */}
+                    <div className="col-span-1">
+                      <label className="block text-sm font-medium mb-2">File Types</label>
+                      <div className="space-y-2">
+                        {['Image', 'Video', 'Document'].map(fileType => (
+                          <label key={fileType} className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={advancedFilters.fileTypes.includes(fileType)}
+                              onChange={(e) => {
+                                const newFileTypes = e.target.checked
+                                  ? [...advancedFilters.fileTypes, fileType]
+                                  : advancedFilters.fileTypes.filter(ft => ft !== fileType);
+                                handleAdvancedFilterChange('fileTypes', newFileTypes);
+                              }}
+                              className="w-4 h-4 border border-border rounded accent-primary"
+                            />
+                            <span className="text-sm">{fileType}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Tags */}
+                    <div className="col-span-1 md:col-span-2 lg:col-span-2 xl:col-span-2">
+                      <label className="block text-sm font-medium mb-2">Tags</label>
+                      <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                        {tags.map(tag => (
+                          <label key={tag.id} className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={advancedFilters.selectedTagIds.includes(tag.id)}
+                              onChange={(e) => {
+                                const newSelectedTagIds = e.target.checked
+                                  ? [...advancedFilters.selectedTagIds, tag.id]
+                                  : advancedFilters.selectedTagIds.filter(id => id !== tag.id);
+                                handleAdvancedFilterChange('selectedTagIds', newSelectedTagIds);
+                              }}
+                              className="w-4 h-4 border border-border rounded accent-primary flex-shrink-0"
+                            />
+                            <span className="text-xs truncate">{tag.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Contributor Name */}
+                    <div className="col-span-1">
+                      <label className="block text-sm font-medium mb-2">Contributor Name</label>
+                      <input
+                        type="text"
+                        placeholder="Search by name..."
+                        value={advancedFilters.contributorName}
+                        onChange={(e) => handleAdvancedFilterChange('contributorName', e.target.value)}
+                        className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                    </div>
+
+                    {/* Metadata Key */}
+                    <div className="col-span-1">
+                      <label className="block text-sm font-medium mb-2">Metadata Key</label>
+                      <select
+                        value={advancedFilters.metadataKey}
+                        onChange={(e) => handleAdvancedFilterChange('metadataKey', e.target.value)}
+                        className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      >
+                        <option value="">Select key...</option>
+                        <option value="EyeSide">Eye Side</option>
+                        <option value="Gender">Gender</option>
+                        <option value="Age">Age</option>
+                        <option value="City">City</option>
+                        <option value="Status">Status</option>
+                        <option value="Profession">Profession</option>
+                        <option value="Notes">Notes</option>
+                      </select>
+                    </div>
+
+                    {/* Metadata Value */}
+                    <div className="col-span-1">
+                      <label className="block text-sm font-medium mb-2">Metadata Value</label>
+                      <input
+                        type="text"
+                        placeholder="Search value..."
+                        value={advancedFilters.metadataValue}
+                        onChange={(e) => handleAdvancedFilterChange('metadataValue', e.target.value)}
+                        className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -379,7 +546,6 @@ export function DatabaseView() {
               icon={<Layers size={16} />}
               label="Collections"
             />
-            <TabButton active={activeTab === 'groups'} onClick={() => setActiveTab('groups')} icon={<Users size={16} />} label="Groups" />
             {isAuthenticated && (
               <TabButton
                 active={activeTab === 'my-collection'}
@@ -410,7 +576,7 @@ export function DatabaseView() {
 
           {loading && (
             <div className="text-center py-20">
-              <div className="inline-block w-12 h-12 border-4 border-[#b8b8fe] border-t-[#9481ff] rounded-full animate-spin mb-4" />
+              <div className="inline-block w-12 h-12 border-4 border-muted border-t-primary rounded-full animate-spin mb-4" />
               <p className="text-muted-foreground">Loading database...</p>
             </div>
           )}
@@ -425,13 +591,13 @@ export function DatabaseView() {
                   </span>
                   {selectedSamples.size > 0 && (
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium" style={{ color: '#9481ff' }}>
+                      <span className="text-sm font-medium text-primary">
                         {selectedSamples.size} selected
                       </span>
                       <button
                         onClick={handleDownloadSelected}
                         disabled={downloadingAll}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#9481ff] text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-60 transition-opacity"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-60 transition-colors"
                       >
                         {downloadingAll ? <Loader size={12} className="animate-spin" /> : <Download size={12} />}
                         Download
@@ -509,8 +675,7 @@ export function DatabaseView() {
                 {canManageContent && (
                   <button
                     onClick={() => setShowCreateCollection(true)}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium"
-                    style={{ backgroundColor: '#9481ff' }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium bg-primary shadow-sm hover:bg-primary/90 transition-colors"
                   >
                     <Plus size={14} />
                     New Collection
@@ -530,15 +695,15 @@ export function DatabaseView() {
                     <div
                       key={collection.id}
                       onClick={() => { setCurrentCollectionId(collection.id); setCurrentCollectionFolderId(null); }}
-                      className="border border-border rounded-xl bg-card p-6 hover:shadow-md transition-all cursor-pointer group hover:border-[#9481ff]/40"
+                      className="border border-border rounded-xl bg-card p-6 hover:shadow-md transition-all cursor-pointer group hover:border-primary/40"
                     >
-                      <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4" style={{ backgroundColor: '#f8f7ff' }}>
-                        <Layers size={22} style={{ color: '#9481ff' }} className="group-hover:scale-110 transition-transform" />
+                      <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4 bg-muted">
+                        <Layers size={22} className="text-primary group-hover:scale-110 transition-transform" />
                       </div>
-                      <h3 className="font-semibold mb-1 group-hover:text-[#9481ff] transition-colors">{collection.name}</h3>
+                      <h3 className="font-semibold mb-1 group-hover:text-primary transition-colors">{collection.name}</h3>
                       <p className="text-muted-foreground text-sm mb-4 line-clamp-2">{collection.description || 'No description'}</p>
                       <div className="flex items-center justify-between text-xs pt-4 border-t border-border">
-                        <span className="font-medium" style={{ color: '#9481ff' }}>
+                        <span className="font-medium text-primary">
                           {collection.folders?.length || 0} folders
                         </span>
                         <span className="text-muted-foreground">
@@ -568,7 +733,7 @@ export function DatabaseView() {
                           value={newCollName}
                           onChange={e => setNewCollName(e.target.value)}
                           placeholder="e.g., Retinal Disease Collection"
-                          className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40"
+                          className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-primary/40"
                           required
                         />
                       </div>
@@ -578,7 +743,7 @@ export function DatabaseView() {
                           value={newCollDesc}
                           onChange={e => setNewCollDesc(e.target.value)}
                           placeholder="Optional description..."
-                          className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40 min-h-20"
+                          className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-primary/40 min-h-20"
                         />
                       </div>
                       {createCollError && (
@@ -597,8 +762,7 @@ export function DatabaseView() {
                         <button
                           type="submit"
                           disabled={createCollLoading}
-                          className="flex-1 px-4 py-2.5 rounded-lg text-white font-medium disabled:opacity-60"
-                          style={{ backgroundColor: '#9481ff' }}
+                          className="flex-1 px-4 py-2.5 rounded-lg text-white font-medium bg-primary hover:bg-primary/90 disabled:opacity-60 transition-colors"
                         >
                           {createCollLoading ? 'Creating...' : 'Create'}
                         </button>
@@ -622,20 +786,20 @@ export function DatabaseView() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => setShowCreateFolder(true)}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium"
-                      style={{ backgroundColor: '#9481ff' }}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium bg-primary shadow-sm hover:bg-primary/90 transition-colors"
                     >
                       <Plus size={14} />
                       New Folder
                     </button>
-                    <button
-                      onClick={() => navigate(`/upload?folderId=${currentCollectionFolderId || ''}&collectionId=${currentCollectionId}`)}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium"
-                      style={{ backgroundColor: '#9481ff' }}
-                    >
-                      <UploadCloud size={14} />
-                      Upload Sample
-                    </button>
+                    {currentCollectionFolderId && (
+                      <button
+                        onClick={() => navigate(`/upload?collectionId=${currentCollectionId}&folderId=${currentCollectionFolderId}`)}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium bg-primary shadow-sm hover:bg-primary/90 transition-colors"
+                      >
+                        <UploadCloud size={14} />
+                        Upload Sample
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -644,14 +808,14 @@ export function DatabaseView() {
               <div className="flex items-center gap-2 text-sm text-muted-foreground mb-5 bg-card border border-border px-4 py-2.5 rounded-xl overflow-x-auto">
                 <button
                   onClick={() => setCurrentCollectionId(null)}
-                  className="hover:text-[#9481ff] transition-colors whitespace-nowrap"
+                  className="hover:text-primary transition-colors whitespace-nowrap"
                 >
                   Collections
                 </button>
                 <ChevronRight size={14} />
                 <button
                   onClick={() => setCurrentCollectionFolderId(null)}
-                  className={`hover:text-[#9481ff] transition-colors whitespace-nowrap ${!currentCollectionFolderId ? 'font-medium text-foreground' : ''}`}
+                  className={`hover:text-primary transition-colors whitespace-nowrap ${!currentCollectionFolderId ? 'font-medium text-foreground' : ''}`}
                 >
                   {currentCollection?.name}
                 </button>
@@ -660,7 +824,7 @@ export function DatabaseView() {
                     <ChevronRight size={14} />
                     <button
                       onClick={() => setCurrentCollectionFolderId(crumb.id)}
-                      className={`hover:text-[#9481ff] transition-colors whitespace-nowrap ${currentCollectionFolderId === crumb.id ? 'font-medium text-foreground' : ''}`}
+                      className={`hover:text-primary transition-colors whitespace-nowrap ${currentCollectionFolderId === crumb.id ? 'font-medium text-foreground' : ''}`}
                     >
                       {crumb.name}
                     </button>
@@ -679,30 +843,21 @@ export function DatabaseView() {
 
               {displayedCollectionFolders.length === 0 && displayedCollectionSamples.length === 0 ? (
                 <div className="border-2 border-dashed border-border rounded-2xl p-12 text-center">
-                  <div className="w-16 h-16 rounded-full mx-auto flex items-center justify-center mb-4" style={{ backgroundColor: '#f8f7ff' }}>
-                    <Folder size={32} style={{ color: '#9481ff' }} />
+                  <div className="w-16 h-16 rounded-full mx-auto flex items-center justify-center mb-4 bg-muted text-primary">
+                    <Folder size={32} />
                   </div>
                   <h3 className="font-semibold mb-2">Empty collection</h3>
                   <p className="text-muted-foreground max-w-sm mx-auto mb-6 text-sm">
-                    Add folders and upload samples to populate this collection.
+                    Create a folder first, then upload samples inside that folder.
                   </p>
                   {canManageContent && (
                     <div className="flex gap-2 justify-center">
                       <button
                         onClick={() => setShowCreateFolder(true)}
-                        className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-white"
-                        style={{ backgroundColor: '#9481ff' }}
+                        className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-white bg-primary shadow-sm hover:bg-primary/90 transition-colors"
                       >
                         <Plus size={16} />
                         Create Folder
-                      </button>
-                      <button
-                        onClick={() => navigate(`/upload?folderId=${currentCollectionFolderId || ''}&collectionId=${currentCollectionId}`)}
-                        className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-white"
-                        style={{ backgroundColor: '#9481ff' }}
-                      >
-                        <UploadCloud size={16} />
-                        Upload Sample
                       </button>
                     </div>
                   )}
@@ -713,10 +868,10 @@ export function DatabaseView() {
                     <div
                       key={folder.id}
                       onClick={() => setCurrentCollectionFolderId(folder.id)}
-                      className="border border-border rounded-xl bg-card p-4 hover:shadow-md transition-all cursor-pointer hover:border-[#9481ff]/50 flex items-center gap-3"
+                      className="border border-border rounded-xl bg-card p-4 hover:shadow-md transition-all cursor-pointer hover:border-primary/50 flex items-center gap-3"
                     >
-                      <div className="w-11 h-11 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: '#f8f7ff' }}>
-                        <Folder size={22} fill="#e5e0ff" stroke="#9481ff" />
+                      <div className="w-11 h-11 rounded-lg flex items-center justify-center shrink-0 bg-muted text-primary">
+                        <Folder size={22} className="text-primary" />
                       </div>
                       <div className="min-w-0">
                         <h4 className="font-medium truncate text-sm">{folder.name}</h4>
@@ -758,7 +913,7 @@ export function DatabaseView() {
                           value={newFolderName}
                           onChange={e => setNewFolderName(e.target.value)}
                           placeholder="e.g., Patient Records"
-                          className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40"
+                          className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-primary/40"
                           required
                         />
                       </div>
@@ -768,7 +923,7 @@ export function DatabaseView() {
                           value={newFolderDesc}
                           onChange={e => setNewFolderDesc(e.target.value)}
                           placeholder="Optional description..."
-                          className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40 min-h-20"
+                          className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-primary/40 min-h-20"
                         />
                       </div>
                       {createFolderError && (
@@ -787,8 +942,7 @@ export function DatabaseView() {
                         <button
                           type="submit"
                           disabled={createFolderLoading}
-                          className="flex-1 px-4 py-2.5 rounded-lg text-white font-medium disabled:opacity-60"
-                          style={{ backgroundColor: '#9481ff' }}
+                          className="flex-1 px-4 py-2.5 rounded-lg text-white font-medium bg-primary hover:bg-primary/90 disabled:opacity-60 transition-colors"
                         >
                           {createFolderLoading ? 'Creating...' : 'Create'}
                         </button>
@@ -800,60 +954,6 @@ export function DatabaseView() {
             </div>
           )}
 
-          {/* ─── GROUPS ─── */}
-          {!loading && activeTab === 'groups' && (
-            <div className="animate-in fade-in duration-200">
-              <div className="flex items-center justify-between mb-5">
-                <span className="text-sm text-muted-foreground font-medium">
-                  {groups.length} group{groups.length !== 1 ? 's' : ''}
-                </span>
-                {isAuthenticated && (
-                  <button
-                    onClick={() => navigate('/groups')}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium"
-                    style={{ backgroundColor: '#9481ff' }}
-                  >
-                    <Users size={14} />
-                    Manage Groups
-                  </button>
-                )}
-              </div>
-
-              {groups.length === 0 ? (
-                <div className="text-center py-20 border-2 border-dashed border-border rounded-2xl">
-                  <Users size={48} className="mx-auto text-muted-foreground mb-4 opacity-40" />
-                  <h3 className="font-semibold mb-1">No groups yet</h3>
-                  <p className="text-muted-foreground text-sm">Groups will appear here once created.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {groups.map(group => (
-                    <div
-                      key={group.id}
-                      onClick={() => navigate('/groups')}
-                      className="border border-border rounded-xl bg-card p-5 hover:shadow-md transition-all cursor-pointer hover:border-[#9481ff]/40 group"
-                    >
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-muted">
-                          <Users size={18} className="text-muted-foreground" />
-                        </div>
-                        <div>
-                          <h3 className="font-semibold group-hover:text-[#9481ff] transition-colors">{group.name}</h3>
-                          <p className="text-xs text-muted-foreground">{group.members?.length || 0} members</p>
-                        </div>
-                      </div>
-                      {group.description && (
-                        <p className="text-sm text-muted-foreground line-clamp-2">{group.description}</p>
-                      )}
-                      <div className="mt-3 pt-3 border-t border-border text-xs text-muted-foreground">
-                        Created {new Date(group.createdAt).toLocaleDateString()}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
 
           {/* ─── MY WORKSPACE ─── */}
           {!loading && activeTab === 'my-collection' && (
@@ -867,16 +967,14 @@ export function DatabaseView() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => setShowCreateFolder(true)}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium"
-                      style={{ backgroundColor: '#9481ff' }}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium bg-primary shadow-sm hover:bg-primary/90 transition-colors"
                     >
                       <Plus size={14} />
                       New Folder
                     </button>
                     <button
                       onClick={() => navigate(`/upload?folderId=${currentFolderId || ''}`)}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium"
-                      style={{ backgroundColor: '#9481ff' }}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium bg-primary shadow-sm hover:bg-primary/90 transition-colors"
                     >
                       <UploadCloud size={14} />
                       Upload Sample
@@ -889,7 +987,7 @@ export function DatabaseView() {
               <div className="flex items-center gap-2 text-sm text-muted-foreground mb-5 bg-card border border-border px-4 py-2.5 rounded-xl overflow-x-auto">
                 <button
                   onClick={() => setCurrentFolderId(null)}
-                  className={`hover:text-[#9481ff] transition-colors whitespace-nowrap ${currentFolderId === null ? 'font-medium text-foreground' : ''}`}
+                  className={`hover:text-primary transition-colors whitespace-nowrap ${currentFolderId === null ? 'font-medium text-foreground' : ''}`}
                 >
                   My Workspace
                 </button>
@@ -898,7 +996,7 @@ export function DatabaseView() {
                     <ChevronRight size={14} />
                     <button
                       onClick={() => setCurrentFolderId(crumb.id)}
-                      className={`hover:text-[#9481ff] transition-colors whitespace-nowrap ${currentFolderId === crumb.id ? 'font-medium text-foreground' : ''}`}
+                      className={`hover:text-primary transition-colors whitespace-nowrap ${currentFolderId === crumb.id ? 'font-medium text-foreground' : ''}`}
                     >
                       {crumb.name}
                     </button>
@@ -917,8 +1015,8 @@ export function DatabaseView() {
 
               {displayedFolders.length === 0 && displayedMySamples.length === 0 ? (
                 <div className="border-2 border-dashed border-border rounded-2xl p-12 text-center">
-                  <div className="w-16 h-16 rounded-full mx-auto flex items-center justify-center mb-4" style={{ backgroundColor: '#f8f7ff' }}>
-                    <Folder size={32} style={{ color: '#9481ff' }} />
+                  <div className="w-16 h-16 rounded-full mx-auto flex items-center justify-center mb-4 bg-muted text-primary">
+                    <Folder size={32} />
                   </div>
                   <h3 className="font-semibold mb-2">Empty workspace</h3>
                   <p className="text-muted-foreground max-w-sm mx-auto mb-6 text-sm">
@@ -927,8 +1025,7 @@ export function DatabaseView() {
                   {canManageContent && (
                     <button
                       onClick={() => navigate('/upload')}
-                      className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-white"
-                      style={{ backgroundColor: '#9481ff' }}
+                      className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-white bg-primary shadow-sm hover:bg-primary/90 transition-colors"
                     >
                       <Plus size={16} />
                       Upload Sample
@@ -941,10 +1038,10 @@ export function DatabaseView() {
                     <div
                       key={folder.id}
                       onClick={() => setCurrentFolderId(folder.id)}
-                      className="border border-border rounded-xl bg-card p-4 hover:shadow-md transition-all cursor-pointer hover:border-[#9481ff]/50 flex items-center gap-3"
+                      className="border border-border rounded-xl bg-card p-4 hover:shadow-md transition-all cursor-pointer hover:border-primary/50 flex items-center gap-3"
                     >
-                      <div className="w-11 h-11 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: '#f8f7ff' }}>
-                        <Folder size={22} fill="#e5e0ff" stroke="#9481ff" />
+                      <div className="w-11 h-11 rounded-lg flex items-center justify-center shrink-0 bg-muted text-primary">
+                        <Folder size={22} className="text-primary" />
                       </div>
                       <div className="min-w-0">
                         <h4 className="font-medium truncate text-sm">{folder.name}</h4>
@@ -986,7 +1083,7 @@ export function DatabaseView() {
                           value={newFolderName}
                           onChange={e => setNewFolderName(e.target.value)}
                           placeholder="e.g., Patient Records"
-                          className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40"
+                          className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-primary/40"
                           required
                         />
                       </div>
@@ -996,7 +1093,7 @@ export function DatabaseView() {
                           value={newFolderDesc}
                           onChange={e => setNewFolderDesc(e.target.value)}
                           placeholder="Optional description..."
-                          className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40 min-h-20"
+                          className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-primary/40 min-h-20"
                         />
                       </div>
                       {createFolderError && (
@@ -1015,8 +1112,7 @@ export function DatabaseView() {
                         <button
                           type="submit"
                           disabled={createFolderLoading}
-                          className="flex-1 px-4 py-2.5 rounded-lg text-white font-medium disabled:opacity-60"
-                          style={{ backgroundColor: '#9481ff' }}
+                          className="flex-1 px-4 py-2.5 rounded-lg text-white font-medium bg-primary hover:bg-primary/90 disabled:opacity-60 transition-colors"
                         >
                           {createFolderLoading ? 'Creating...' : 'Create'}
                         </button>
@@ -1040,7 +1136,7 @@ function TabButton({ active, onClick, icon, label }: {
     <button
       onClick={onClick}
       className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 whitespace-nowrap
-        ${active ? 'bg-[#9481ff] text-white shadow-sm' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+        ${active ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
     >
       {icon}
       {label}
@@ -1060,7 +1156,7 @@ function SampleCard({
   return (
     <div
       className={`border rounded-xl bg-card p-4 hover:shadow-lg transition-all cursor-pointer flex flex-col relative group
-        ${isSelected ? 'border-[#9481ff] ring-2 ring-[#9481ff]/15' : 'border-border hover:border-[#9481ff]/40'}`}
+        ${isSelected ? 'border-primary ring-2 ring-primary/15' : 'border-border hover:border-primary/40'}`}
     >
       {/* Checkbox */}
       <div
@@ -1069,7 +1165,7 @@ function SampleCard({
       >
         <div
           className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all
-            ${isSelected ? 'bg-[#9481ff] border-[#9481ff]' : 'bg-white border-border hover:border-[#9481ff]'}`}
+            ${isSelected ? 'bg-primary border-primary' : 'bg-input-background border-border hover:border-primary'}`}
         >
           {isSelected && (
             <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
@@ -1082,18 +1178,15 @@ function SampleCard({
       <div className="flex-1" onClick={onClick}>
         {/* Title */}
         <div className="flex items-start gap-2 mb-2 pr-7">
-          <File size={15} className="text-[#9481ff] shrink-0 mt-0.5" />
-          <h3 className="text-sm font-medium line-clamp-2 leading-snug group-hover:text-[#9481ff] transition-colors">
+          <File size={15} className="text-primary shrink-0 mt-0.5" />
+          <h3 className="text-sm font-medium line-clamp-2 leading-snug group-hover:text-primary transition-colors">
             {sample.title}
           </h3>
         </div>
 
         {/* Type badge */}
         <div className="mb-3">
-          <span
-            className="px-2 py-0.5 rounded text-xs font-medium"
-            style={{ backgroundColor: '#f8f7ff', color: '#9481ff', border: '1px solid #b8b8fe' }}
-          >
+          <span className="inline-block px-2 py-0.5 rounded text-xs font-medium border border-border bg-muted text-primary">
             {fileTypeBadge}
           </span>
         </div>
@@ -1105,6 +1198,12 @@ function SampleCard({
           {sample.city && <div>{sample.city}</div>}
           {sample.files?.length > 0 && (
             <div>{sample.files.length} file{sample.files.length !== 1 ? 's' : ''}</div>
+          )}
+          {(sample.downloadCount !== undefined || sample.viewCount !== undefined) && (
+            <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+              {sample.downloadCount !== undefined && <span>{sample.downloadCount} downloads</span>}
+              {sample.viewCount !== undefined && <span>{sample.viewCount} views</span>}
+            </div>
           )}
         </div>
 

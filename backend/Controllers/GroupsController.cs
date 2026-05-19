@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -87,10 +88,16 @@ namespace SarabPlatform.Controllers
         }
 
         [HttpPost]
-        [Authorize(Policy = "ContributorOrAdmin")]
+        [Authorize(Policy = "CanCreateGroups")]
         public IActionResult CreateGroup(CreateGroupDto dto)
         {
-            var creator = _context.Users.FirstOrDefault(u => u.Id == dto.CreatedBy);
+            var creatorIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+            if (!int.TryParse(creatorIdClaim, out var creatorId))
+            {
+                return Unauthorized("Invalid authenticated user.");
+            }
+
+            var creator = _context.Users.FirstOrDefault(u => u.Id == creatorId);
             if (creator == null)
             {
                 return BadRequest("Creator user not found.");
@@ -100,7 +107,7 @@ namespace SarabPlatform.Controllers
             {
                 Name = dto.Name,
                 Description = dto.Description,
-                CreatedBy = dto.CreatedBy,
+                CreatedBy = creatorId,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -110,7 +117,7 @@ namespace SarabPlatform.Controllers
             _context.GroupMembers.Add(new GroupMember
             {
                 GroupId = group.Id,
-                UserId = dto.CreatedBy,
+                UserId = creatorId,
                 Role = 0,
                 JoinedAt = DateTime.UtcNow
             });

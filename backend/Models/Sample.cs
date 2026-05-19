@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace SarabPlatform.Models
 {
@@ -15,9 +16,9 @@ namespace SarabPlatform.Models
         public Folder? Folder { get; set; }
         public string? Description { get; set; }
         public int CreatedBy { get; set; }
+        public User? CreatedByUser { get; set; }
+        public int ViewCount { get; set; }
         public int DownloadCount { get; set; }
-        [Required]
-        public string? Metadata { get; set; }
         public List<ResourceFile> Files { get; set; } = new();
         public List<Tag>? Tags { get; set; } = new();
         public bool IsDeleted { get; set; }
@@ -26,70 +27,66 @@ namespace SarabPlatform.Models
         public DateTime DeletedAt { get; set; }
 
         [NotMapped]
-        public string? EyeSide => GetMetadataValue("EyeSide");
+        public string? EyeSide => GetMetadataValueFromFirstFile("EyeSide");
 
         [NotMapped]
-        public string? Gender => GetMetadataValue("Gender");
+        public string? Gender => GetMetadataValueFromFirstFile("Gender");
 
         [NotMapped]
-        public int? Age => GetMetadataInt("Age");
+        public int? Age => GetMetadataIntFromFirstFile("Age");
 
         [NotMapped]
-        public string? City => GetMetadataValue("City");
+        public string? City => GetMetadataValueFromFirstFile("City");
 
         [NotMapped]
-        public string? Status => GetMetadataValue("Status");
+        public string? Status => GetMetadataValueFromFirstFile("Status");
 
         [NotMapped]
-        public string? Profession => GetMetadataValue("Profession");
+        public string? Profession => GetMetadataValueFromFirstFile("Profession");
 
         [NotMapped]
-        public string? Notes => GetMetadataValue("Notes");
+        public string? Notes => GetMetadataValueFromFirstFile("Notes");
 
-        private Dictionary<string, JsonElement> GetMetadataJson()
+        private string? GetMetadataValueFromFirstFile(string key)
         {
-            if (string.IsNullOrWhiteSpace(Metadata))
-                return new Dictionary<string, JsonElement>();
+            var firstFile = Files?.FirstOrDefault();
+            if (firstFile == null)
+                return null;
+
+            if (string.IsNullOrWhiteSpace(firstFile.Metadata))
+                return null;
 
             try
             {
-                using var document = JsonDocument.Parse(Metadata);
-                if (document.RootElement.ValueKind != JsonValueKind.Object)
-                    return new Dictionary<string, JsonElement>();
+                var root = JsonNode.Parse(firstFile.Metadata);
+                if (root is not JsonObject obj)
+                    return null;
 
-                return document.RootElement.EnumerateObject()
-                    .ToDictionary(p => p.Name, p => p.Value);
+                if (!obj.TryGetPropertyValue(key, out var value) || value is null)
+                    return null;
+
+                if (value is JsonValue jsonValue)
+                {
+                    var rawValue = jsonValue.GetValue<object?>();
+                    return rawValue?.ToString();
+                }
+
+                return value.ToJsonString();
             }
             catch
             {
-                return new Dictionary<string, JsonElement>();
+                return null;
             }
         }
 
-        private string? GetMetadataValue(string key)
-        {
-            var json = GetMetadataJson();
-            if (json.TryGetValue(key, out var element))
-            {
-                return element.ValueKind switch
-                {
-                    JsonValueKind.String => element.GetString(),
-                    JsonValueKind.Number => element.GetRawText(),
-                    JsonValueKind.True => "True",
-                    JsonValueKind.False => "False",
-                    _ => element.ToString(),
-                };
-            }
-            return null;
-        }
+        public string? Metadata { get; set; }
 
-        private int? GetMetadataInt(string key)
+        private int? GetMetadataIntFromFirstFile(string key)
         {
-            var value = GetMetadataValue(key);
+            var value = GetMetadataValueFromFirstFile(key);
             if (int.TryParse(value, out var result))
                 return result;
             return null;
         }
-
     }
 }

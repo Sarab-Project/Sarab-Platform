@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
-import { fetchCollections, uploadSample, type Collection } from '../services/api';
+import { fetchCollections, uploadSample, fetchTags, type Collection, type FileMetadataInput, type Tag } from '../services/api';
 import { UploadCloud, X, File as FileIcon, AlertCircle, CheckCircle, Loader } from 'lucide-react';
+import { Badge } from '../components/ui/badge';
 
 export function UploadSample() {
   const { user, isAuthenticated } = useAuth();
@@ -13,21 +14,20 @@ export function UploadSample() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [folderId, setFolderId] = useState('');
-  const [eyeSide, setEyeSide] = useState('');
-  const [gender, setGender] = useState('');
-  const [age, setAge] = useState('');
-  const [city, setCity] = useState('');
-  const [status, setStatus] = useState('');
-  const [profession, setProfession] = useState('');
-  const [notes, setNotes] = useState('');
-  const [tagInput, setTagInput] = useState('');
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [selectedFileIndex, setSelectedFileIndex] = useState<number | null>(null);
+  const [fileMetadata, setFileMetadata] = useState<FileMetadataInput[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Collections/Folders
   const [collections, setCollections] = useState<Collection[]>([]);
   const [selectedCollectionId, setSelectedCollectionId] = useState('');
   const [collectionsLoading, setCollectionsLoading] = useState(true);
+
+  // Tags
+  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+  const [tagsLoading, setTagsLoading] = useState(true);
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -44,6 +44,11 @@ export function UploadSample() {
       .then(setCollections)
       .catch(() => {})
       .finally(() => setCollectionsLoading(false));
+    
+    fetchTags()
+      .then(setAvailableTags)
+      .catch(() => {})
+      .finally(() => setTagsLoading(false));
   }, [isAuthenticated]);
 
   // Handle URL query params for pre-selection
@@ -51,11 +56,17 @@ export function UploadSample() {
     const collectionId = searchParams.get('collectionId');
     const folderIdParam = searchParams.get('folderId');
 
-    if (collectionId) {
-      setSelectedCollectionId(collectionId);
-    }
     if (folderIdParam) {
       setFolderId(folderIdParam);
+    }
+
+    if (collectionId) {
+      setSelectedCollectionId(collectionId);
+    } else if (folderIdParam && collections.length > 0) {
+      const matchingCollection = collections.find(c => c.folders?.some(f => f.id.toString() === folderIdParam));
+      if (matchingCollection) {
+        setSelectedCollectionId(matchingCollection.id.toString());
+      }
     }
   }, [searchParams, collections]);
 
@@ -66,16 +77,41 @@ export function UploadSample() {
 
   const handleFiles = (files: FileList | null) => {
     if (!files) return;
-    setSelectedFiles(prev => [...prev, ...Array.from(files)]);
+
+    const incomingFiles = Array.from(files);
+    setSelectedFiles(prev => [...prev, ...incomingFiles]);
+    setFileMetadata(prev => [...prev, ...incomingFiles.map(() => ({ }))]);
+    setSelectedFileIndex(prev => prev === null ? 0 : prev);
   };
 
   const removeFile = (index: number) => {
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    setFileMetadata(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     handleFiles(e.dataTransfer.files);
+  };
+
+  useEffect(() => {
+    if (selectedFiles.length === 0) {
+      setSelectedFileIndex(null);
+      return;
+    }
+    setSelectedFileIndex(prev => (prev === null || prev >= selectedFiles.length ? 0 : prev));
+  }, [selectedFiles]);
+
+  const updateSelectedFileMetadata = (field: keyof FileMetadataInput, value: string) => {
+    if (selectedFileIndex === null) return;
+    setFileMetadata(prev => {
+      const next = [...prev];
+      next[selectedFileIndex] = {
+        ...next[selectedFileIndex],
+        [field]: field === 'age' ? (value ? Number(value) : undefined) : value,
+      };
+      return next;
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -100,24 +136,26 @@ export function UploadSample() {
     }, 300);
 
     try {
-      const parsedTags = tagInput
-        .split(/[,;\n]+/)
-        .map(tag => tag.trim())
-        .filter(Boolean);
+      const metadataPayload = selectedFiles.map((_, index) => {
+        const metadata = fileMetadata[index] || {};
+        return {
+          eyeSide: metadata.eyeSide || null,
+          gender: metadata.gender || null,
+          age: metadata.age ?? null,
+          city: metadata.city || null,
+          status: metadata.status || null,
+          profession: metadata.profession || null,
+          notes: metadata.notes || null,
+        };
+      });
 
       await uploadSample({
         title,
         description: description || undefined,
         folderId: parseInt(folderId),
-        eyeSide: eyeSide || undefined,
-        gender: gender || undefined,
-        age: age ? parseInt(age) : undefined,
-        city: city || undefined,
-        status: status || undefined,
-        profession: profession || undefined,
-        notes: notes || undefined,
-        tags: parsedTags.length > 0 ? parsedTags : undefined,
+        tags: selectedTagIds.length > 0 ? selectedTagIds : undefined,
         files: selectedFiles,
+        fileMetadataJson: JSON.stringify(metadataPayload),
       });
 
       clearInterval(progressInterval);
@@ -223,15 +261,44 @@ export function UploadSample() {
 
               <div>
                 <label className="block text-sm font-medium mb-1.5">Tags</label>
-                <input
-                  type="text"
-                  value={tagInput}
-                  onChange={e => setTagInput(e.target.value)}
-                  placeholder="Add tags separated by commas, e.g., glaucoma, drusen"
-                  className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40"
-                />
+                {tagsLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader size={14} className="animate-spin" />
+                    Loading tags...
+                  </div>
+                ) : availableTags.length === 0 ? (
+                  <p className="text-sm text-muted-foreground italic">No tags available.</p>
+                ) : (
+                  <div className="p-3 border border-border rounded-lg bg-input-background">
+                    <div className="flex flex-wrap gap-2">
+                      {availableTags.map(tag => {
+                        const isSelected = selectedTagIds.includes(tag.id);
+                        return (
+                          <Badge
+                            key={tag.id}
+                            variant={isSelected ? "default" : "outline"}
+                            className={`cursor-pointer transition-all duration-200 hover:scale-105 ${
+                              isSelected
+                                ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                                : "border-border text-foreground hover:bg-accent hover:text-accent-foreground"
+                            }`}
+                            onClick={() => {
+                              if (isSelected) {
+                                setSelectedTagIds(prev => prev.filter(id => id !== tag.id));
+                              } else {
+                                setSelectedTagIds(prev => [...prev, tag.id]);
+                              }
+                            }}
+                          >
+                            {tag.name}
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Add multiple keywords that describe the sample. Tags can be used to filter search results.
+                  Select one or more predefined tags that describe the sample.
                 </p>
               </div>
             </div>
@@ -324,15 +391,25 @@ export function UploadSample() {
             {selectedFiles.length > 0 && (
               <div className="mt-4 space-y-2">
                 {selectedFiles.map((file, i) => (
-                  <div key={i} className="flex items-center gap-3 p-3 border border-border rounded-lg bg-background">
+                  <div
+                    key={i}
+                    onClick={() => setSelectedFileIndex(i)}
+                    className={`w-full cursor-pointer text-left flex items-center gap-3 p-3 border rounded-lg transition-colors ${selectedFileIndex === i ? 'border-primary bg-primary/10' : 'border-border bg-background hover:border-primary/70'}`}
+                  >
                     <FileIcon size={18} className="text-[#9481ff] shrink-0" />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">{file.name}</div>
                       <div className="text-xs text-muted-foreground">{formatBytes(file.size)}</div>
                     </div>
+                    {selectedFileIndex === i && (
+                      <span className="text-xs text-primary font-medium">Selected</span>
+                    )}
                     <button
                       type="button"
-                      onClick={() => removeFile(i)}
+                      onClick={e => {
+                        e.stopPropagation();
+                        removeFile(i);
+                      }}
                       className="text-muted-foreground hover:text-red-500 transition-colors"
                     >
                       <X size={16} />
@@ -341,96 +418,101 @@ export function UploadSample() {
                 ))}
               </div>
             )}
-          </div>
 
-          {/* Clinical Metadata */}
-          <div className="border border-border rounded-xl bg-card p-6">
-            <h3 className="font-semibold mb-5">Clinical Metadata <span className="text-xs font-normal text-muted-foreground">(optional)</span></h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1.5">Eye Side</label>
-                <select
-                  value={eyeSide}
-                  onChange={e => setEyeSide(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40"
-                >
-                  <option value="">Select...</option>
-                  <option value="Right">Right (OD)</option>
-                  <option value="Left">Left (OS)</option>
-                  <option value="Both">Both (OU)</option>
-                </select>
-              </div>
+            {selectedFileIndex !== null ? (
+              <div className="mt-6 border-t border-border pt-6">
+                <h4 className="font-semibold mb-3">Metadata for selected file</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Eye Side</label>
+                    <select
+                      value={fileMetadata[selectedFileIndex]?.eyeSide || ''}
+                      onChange={e => updateSelectedFileMetadata('eyeSide', e.target.value)}
+                      className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40"
+                    >
+                      <option value="">Select...</option>
+                      <option value="Right">Right (OD)</option>
+                      <option value="Left">Left (OS)</option>
+                      <option value="Both">Both (OU)</option>
+                    </select>
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1.5">Gender</label>
-                <select
-                  value={gender}
-                  onChange={e => setGender(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40"
-                >
-                  <option value="">Select...</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Gender</label>
+                    <select
+                      value={fileMetadata[selectedFileIndex]?.gender || ''}
+                      onChange={e => updateSelectedFileMetadata('gender', e.target.value)}
+                      className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40"
+                    >
+                      <option value="">Select...</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1.5">Patient Age</label>
-                <input
-                  type="number"
-                  value={age}
-                  onChange={e => setAge(e.target.value)}
-                  placeholder="e.g., 58"
-                  min={0}
-                  max={150}
-                  className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40"
-                />
-              </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Patient Age</label>
+                    <input
+                      type="number"
+                      value={fileMetadata[selectedFileIndex]?.age ?? ''}
+                      onChange={e => updateSelectedFileMetadata('age', e.target.value)}
+                      placeholder="e.g., 58"
+                      min={0}
+                      max={150}
+                      className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1.5">City</label>
-                <input
-                  type="text"
-                  value={city}
-                  onChange={e => setCity(e.target.value)}
-                  placeholder="e.g., Cairo"
-                  className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40"
-                />
-              </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">City</label>
+                    <input
+                      type="text"
+                      value={fileMetadata[selectedFileIndex]?.city || ''}
+                      onChange={e => updateSelectedFileMetadata('city', e.target.value)}
+                      placeholder="e.g., Cairo"
+                      className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1.5">Condition / Status</label>
-                <input
-                  type="text"
-                  value={status}
-                  onChange={e => setStatus(e.target.value)}
-                  placeholder="e.g., Diabetic Retinopathy"
-                  className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40"
-                />
-              </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Condition / Status</label>
+                    <input
+                      type="text"
+                      value={fileMetadata[selectedFileIndex]?.status || ''}
+                      onChange={e => updateSelectedFileMetadata('status', e.target.value)}
+                      placeholder="e.g., Diabetic Retinopathy"
+                      className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1.5">Profession</label>
-                <input
-                  type="text"
-                  value={profession}
-                  onChange={e => setProfession(e.target.value)}
-                  placeholder="e.g., Engineer"
-                  className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40"
-                />
-              </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Profession</label>
+                    <input
+                      type="text"
+                      value={fileMetadata[selectedFileIndex]?.profession || ''}
+                      onChange={e => updateSelectedFileMetadata('profession', e.target.value)}
+                      placeholder="e.g., Engineer"
+                      className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40"
+                    />
+                  </div>
 
-              <div className="col-span-full">
-                <label className="block text-sm font-medium mb-1.5">Clinical Notes</label>
-                <textarea
-                  value={notes}
-                  onChange={e => setNotes(e.target.value)}
-                  placeholder="Any additional clinical notes..."
-                  className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40 min-h-20 resize-y"
-                />
+                  <div className="col-span-full">
+                    <label className="block text-sm font-medium mb-1.5">Clinical Notes</label>
+                    <textarea
+                      value={fileMetadata[selectedFileIndex]?.notes || ''}
+                      onChange={e => updateSelectedFileMetadata('notes', e.target.value)}
+                      placeholder="Any additional clinical notes..."
+                      className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40 min-h-20 resize-y"
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="mt-6 rounded-xl border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
+                Select a file to add metadata below.
+              </div>
+            )}
           </div>
 
           {/* Upload Progress */}

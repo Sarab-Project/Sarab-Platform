@@ -1,0 +1,65 @@
+[
+  {
+    "name": "Diabetic Retinopathy"
+  },
+  {
+    "name": "Mild DR"
+  },
+  {
+    "name": "Moderate DR"
+  },
+  {
+    "name": "Severe DR"
+  },
+  {
+    "name": "Proliferative DR"
+  },
+  {
+    "name": "Macular Edema"
+  },
+  {
+    "name": "Retinal Detachment"
+  },
+  {
+    "name": "Glaucoma"
+  },
+  {
+    "name": "Age-related Macular Degeneration"
+  },
+  {
+    "name": "Hypertensive Retinopathy"
+  },
+  {
+    "name": "Retinal Vein Occlusion"
+  },
+  {
+    "name": "Optic Disc Swelling"
+  },
+  {
+    "name": "Cotton Wool Spots"
+  },
+  {
+    "name": "Hard Exudates"
+  },
+  {
+    "name": "Microaneurysms"
+  },
+  {
+    "name": "Hemorrhages"
+  },
+  {
+    "name": "Neovascularization"
+  },
+  {
+    "name": "Laser Photocoagulation"
+  },
+  {
+    "name": "Fundus Photography"
+  },
+  {
+    "name": "OCT Imaging"
+  },
+  {
+    "name": "Fluorescein Angiography"
+  }
+]

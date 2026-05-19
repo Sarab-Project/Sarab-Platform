@@ -46,6 +46,7 @@ builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
     options.AddPolicy("ContributorOrAdmin", policy => policy.RequireRole("Admin", "Contributor"));
+    options.AddPolicy("CanCreateGroups", policy => policy.RequireRole("Admin", "Contributor", "Researcher"));
 });
 
 builder.Services.AddEndpointsApiExplorer();
@@ -83,6 +84,89 @@ using (var scope = app.Services.CreateScope())
         });
         dbContext.SaveChanges();
     }
+    else if (existingAdmin.Role != UserRole.Admin || !existingAdmin.IsActive)
+    {
+        existingAdmin.Role = UserRole.Admin;
+        existingAdmin.IsActive = true;
+        existingAdmin.IsVerified = true;
+        existingAdmin.IsEmailVerified = true;
+        dbContext.SaveChanges();
+    }
+
+    // Seed tags from JSON file
+    try
+    {
+        var tagsJsonPath = Path.Combine(Directory.GetCurrentDirectory(), "tags.json");
+        var forceReset = Environment.GetEnvironmentVariable("FORCE_TAG_RESET")?.ToLowerInvariant() == "true";
+
+        if (File.Exists(tagsJsonPath))
+        {
+            var tagsJson = File.ReadAllText(tagsJsonPath);
+            var tagData = System.Text.Json.JsonSerializer.Deserialize<List<TagSeedData>>(tagsJson);
+
+            if (tagData != null && tagData.Any())
+            {
+                var existingTags = dbContext.Tags.ToList();
+                var tagsAdded = 0;
+                var tagsUpdated = 0;
+
+                if (forceReset)
+                {
+                    // Force reset: clear all existing tags
+                    dbContext.Tags.RemoveRange(dbContext.Tags);
+                    dbContext.SaveChanges();
+
+                    // Add all tags from JSON
+                    var tags = tagData.Select(td => new Tag { Name = td.name }).ToList();
+                    dbContext.Tags.AddRange(tags);
+                    dbContext.SaveChanges();
+
+                    Console.WriteLine($"Force reset: cleared all existing tags and added {tags.Count} new tags from tags.json");
+                }
+                else
+                {
+                    // Smart seeding: preserve existing tags and relationships
+                    foreach (var tagSeed in tagData)
+                    {
+                        var existingTag = existingTags.FirstOrDefault(t => t.Name?.ToLowerInvariant() == tagSeed.name?.ToLowerInvariant());
+                        if (existingTag == null)
+                        {
+                            // Add new tag
+                            dbContext.Tags.Add(new Tag { Name = tagSeed.name });
+                            tagsAdded++;
+                        }
+                        else
+                        {
+                            // Update existing tag name if it has changed (case-insensitive)
+                            if (existingTag.Name != tagSeed.name)
+                            {
+                                existingTag.Name = tagSeed.name;
+                                tagsUpdated++;
+                            }
+                        }
+                    }
+
+                    if (tagsAdded > 0 || tagsUpdated > 0)
+                    {
+                        dbContext.SaveChanges();
+                        Console.WriteLine($"Tag seeding complete: {tagsAdded} added, {tagsUpdated} updated");
+                    }
+                    else
+                    {
+                        Console.WriteLine("All tags from tags.json already exist in database");
+                    }
+                }
+            }
+        }
+        else
+        {
+            Console.WriteLine("tags.json file not found. Skipping tag seeding.");
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error seeding tags: {ex.Message}");
+    }
 }
 
 if (!app.Environment.IsDevelopment())
@@ -99,5 +183,10 @@ app.UseSwaggerUI();
 app.MapGet("/", () => "Root endpoint!");
 
 app.Run();
+
+public class TagSeedData
+{
+    public string? name { get; set; }
+}
 
 

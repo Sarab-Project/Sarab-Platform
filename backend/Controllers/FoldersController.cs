@@ -31,7 +31,13 @@ namespace SarabPlatform.Controllers
 
         private static bool IsPrivateCollection(Collection collection)
         {
-            return string.Equals(collection.Name, "Private", StringComparison.OrdinalIgnoreCase);
+            return collection.OwnerType == OwnerType.User &&
+                   string.Equals(collection.Name, "Private Collection", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool UserIsGroupMember(int userId, int groupId)
+        {
+            return _context.GroupMembers.Any(gm => gm.GroupId == groupId && gm.UserId == userId);
         }
 
         [HttpGet]
@@ -47,7 +53,11 @@ namespace SarabPlatform.Controllers
 
             if (!IsAdminUser())
             {
-                query = query.Where(f => f.Collection!.Name != "Private" || (f.Collection!.OwnerType == OwnerType.User && f.Collection!.OwnerId == currentUserId));
+                query = query.Where(f =>
+                    (f.Collection!.OwnerType == OwnerType.User && f.Collection.Name != "Private Collection") ||
+                    (f.Collection!.OwnerType == OwnerType.User && f.Collection.OwnerId == currentUserId) ||
+                    (f.Collection!.OwnerType == OwnerType.Group && _context.GroupMembers.Any(gm => gm.GroupId == f.Collection.OwnerId && gm.UserId == currentUserId))
+                );
             }
 
             var folders = query.ToList();
@@ -70,6 +80,11 @@ namespace SarabPlatform.Controllers
             }
 
             if (!IsAdminUser() && IsPrivateCollection(folder.Collection!) && !(folder.Collection!.OwnerType == OwnerType.User && folder.Collection!.OwnerId == currentUserId))
+            {
+                return NotFound();
+            }
+
+            if (!IsAdminUser() && folder.Collection!.OwnerType == OwnerType.Group && !UserIsGroupMember(currentUserId, folder.Collection.OwnerId))
             {
                 return NotFound();
             }
@@ -97,6 +112,19 @@ namespace SarabPlatform.Controllers
             if (collection == null)
             {
                 return BadRequest("Collection not found.");
+            }
+
+            if (!IsAdminUser())
+            {
+                if (collection.OwnerType == OwnerType.User && collection.OwnerId != currentUserId)
+                {
+                    return Forbid("You cannot add folders to another user's collection.");
+                }
+
+                if (collection.OwnerType == OwnerType.Group && !UserIsGroupMember(currentUserId, collection.OwnerId))
+                {
+                    return Forbid("Only group members can add folders to this group collection.");
+                }
             }
 
             var user = _context.Users.FirstOrDefault(u => u.Id == currentUserId);

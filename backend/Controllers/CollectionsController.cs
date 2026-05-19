@@ -31,7 +31,13 @@ namespace SarabPlatform.Controllers
 
         private static bool IsPrivateCollection(Collection collection)
         {
-            return string.Equals(collection.Name, "Private", StringComparison.OrdinalIgnoreCase);
+            return collection.OwnerType == OwnerType.User &&
+                   string.Equals(collection.Name, "Private Collection", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool UserIsGroupMember(int userId, int groupId)
+        {
+            return _context.GroupMembers.Any(gm => gm.GroupId == groupId && gm.UserId == userId);
         }
 
         [HttpGet]
@@ -45,7 +51,11 @@ namespace SarabPlatform.Controllers
 
             if (!IsAdminUser())
             {
-                collectionsQuery = collectionsQuery.Where(c => c.Name != "Private" || (c.OwnerType == OwnerType.User && c.OwnerId == currentUserId));
+                collectionsQuery = collectionsQuery.Where(c =>
+                    (c.OwnerType == OwnerType.User && c.Name != "Private Collection") ||
+                    (c.OwnerType == OwnerType.User && c.OwnerId == currentUserId) ||
+                    (c.OwnerType == OwnerType.Group && _context.GroupMembers.Any(gm => gm.GroupId == c.OwnerId && gm.UserId == currentUserId))
+                );
             }
 
             var collections = collectionsQuery.ToList();
@@ -66,6 +76,11 @@ namespace SarabPlatform.Controllers
             }
 
             if (!IsAdminUser() && IsPrivateCollection(collection) && !(collection.OwnerType == OwnerType.User && collection.OwnerId == currentUserId))
+            {
+                return NotFound();
+            }
+
+            if (!IsAdminUser() && collection.OwnerType == OwnerType.Group && !UserIsGroupMember(currentUserId, collection.OwnerId))
             {
                 return NotFound();
             }
@@ -99,6 +114,11 @@ namespace SarabPlatform.Controllers
                 {
                     return BadRequest("Group owner not found.");
                 }
+
+                if (!UserIsGroupMember(currentUserId, group.Id) && !IsAdminUser())
+                {
+                    return Forbid("Only group members can create collections for this group.");
+                }
             }
             else
             {
@@ -106,6 +126,11 @@ namespace SarabPlatform.Controllers
                 if (owner == null)
                 {
                     return BadRequest("Owner not found.");
+                }
+
+                if (!IsAdminUser() && dto.OwnerId != currentUserId)
+                {
+                    return Forbid("Only the authenticated user can create a collection for their own account.");
                 }
             }
 

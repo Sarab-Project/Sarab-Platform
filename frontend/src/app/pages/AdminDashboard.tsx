@@ -2,8 +2,22 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  fetchUsers, fetchSamples, fetchCollections, fetchGroups,
-  updateUser, deleteUser, type UserPublic, type Sample, type Collection, type Group
+  fetchUsers,
+  fetchSamples,
+  fetchCollections,
+  fetchGroups,
+  fetchFolders,
+  updateUser,
+  deleteUser,
+  deleteSample,
+  deleteCollection,
+  deleteFolder,
+  deleteGroup,
+  type UserPublic,
+  type Sample,
+  type Collection,
+  type Folder,
+  type Group,
 } from '../services/api';
 import {
   Users, Layers, Database, Shield, Loader, AlertCircle,
@@ -21,12 +35,13 @@ export function AdminDashboard() {
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'collections' | 'groups'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'samples' | 'collections' | 'folders' | 'groups'>('overview');
 
   // Data
   const [users, setUsers] = useState<UserPublic[]>([]);
   const [samples, setSamples] = useState<Sample[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
 
   const [loading, setLoading] = useState(true);
@@ -39,6 +54,10 @@ export function AdminDashboard() {
 
   // Delete state
   const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
+  const [deletingSampleId, setDeletingSampleId] = useState<number | null>(null);
+  const [deletingCollectionId, setDeletingCollectionId] = useState<number | null>(null);
+  const [deletingFolderId, setDeletingFolderId] = useState<number | null>(null);
+  const [deletingGroupId, setDeletingGroupId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) { navigate('/signin'); return; }
@@ -50,15 +69,17 @@ export function AdminDashboard() {
     setLoading(true);
     setError('');
     try {
-      const [u, s, c, g] = await Promise.allSettled([
+      const [u, s, c, f, g] = await Promise.allSettled([
         fetchUsers(),
         fetchSamples(),
         fetchCollections(),
+        fetchFolders(),
         fetchGroups(),
       ]);
       if (u.status === 'fulfilled') setUsers(u.value);
       if (s.status === 'fulfilled') setSamples(s.value);
       if (c.status === 'fulfilled') setCollections(c.value);
+      if (f.status === 'fulfilled') setFolders(f.value);
       if (g.status === 'fulfilled') setGroups(g.value);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data');
@@ -81,22 +102,76 @@ export function AdminDashboard() {
   };
 
   const handleDeleteUser = async (userId: number) => {
-    if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) return;
+    if (!confirm('Are you sure you want to deactivate this user? This action prevents login but keeps their account record.')) return;
     setDeletingUserId(userId);
     try {
       await deleteUser(userId);
-      setUsers(prev => prev.filter(u => u.id !== userId));
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, isActive: false } : u));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete user');
+      alert(err instanceof Error ? err.message : 'Failed to deactivate user');
     } finally {
       setDeletingUserId(null);
+    }
+  };
+
+  const handleDeleteSample = async (sampleId: number) => {
+    if (!confirm('Delete this sample? This cannot be undone.')) return;
+    setDeletingSampleId(sampleId);
+    try {
+      await deleteSample(sampleId);
+      setSamples(prev => prev.filter(s => s.id !== sampleId));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete sample');
+    } finally {
+      setDeletingSampleId(null);
+    }
+  };
+
+  const handleDeleteCollection = async (collectionId: number) => {
+    if (!confirm('Delete this collection? This will mark it as removed.')) return;
+    setDeletingCollectionId(collectionId);
+    try {
+      await deleteCollection(collectionId);
+      setCollections(prev => prev.filter(c => c.id !== collectionId));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete collection');
+    } finally {
+      setDeletingCollectionId(null);
+    }
+  };
+
+  const handleDeleteFolder = async (folderId: number) => {
+    if (!confirm('Delete this folder? This will mark it as removed.')) return;
+    setDeletingFolderId(folderId);
+    try {
+      await deleteFolder(folderId);
+      setFolders(prev => prev.filter(f => f.id !== folderId));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete folder');
+    } finally {
+      setDeletingFolderId(null);
+    }
+  };
+
+  const handleDeleteGroup = async (groupId: number) => {
+    if (!confirm('Delete this group? This will mark it as removed.')) return;
+    setDeletingGroupId(groupId);
+    try {
+      await deleteGroup(groupId);
+      setGroups(prev => prev.filter(g => g.id !== groupId));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete group');
+    } finally {
+      setDeletingGroupId(null);
     }
   };
 
   const tabs = [
     { key: 'overview', label: 'Overview', icon: <Database size={15} /> },
     { key: 'users', label: 'Users', icon: <Users size={15} /> },
+    { key: 'samples', label: 'Samples', icon: <Database size={15} /> },
     { key: 'collections', label: 'Collections', icon: <Layers size={15} /> },
+    { key: 'folders', label: 'Folders', icon: <Layers size={15} /> },
     { key: 'groups', label: 'Groups', icon: <Users size={15} /> },
   ] as const;
 
@@ -160,6 +235,7 @@ export function AdminDashboard() {
                 { label: 'Total Samples', value: samples.length, icon: <Database size={20} /> },
                 { label: 'Total Users', value: users.length, icon: <Users size={20} /> },
                 { label: 'Collections', value: collections.length, icon: <Layers size={20} /> },
+                { label: 'Folders', value: folders.length, icon: <Layers size={20} /> },
                 { label: 'Groups', value: groups.length, icon: <Users size={20} /> },
               ].map(stat => (
                 <div key={stat.label} className="border border-border rounded-xl bg-card p-5">
@@ -189,7 +265,10 @@ export function AdminDashboard() {
                   </div>
                   <span
                     className="text-xs px-2 py-0.5 rounded-full font-medium shrink-0"
-                    style={ROLE_COLORS[u.role] || ROLE_COLORS[2]}
+                    style={{
+                      backgroundColor: ROLE_COLORS[u.role]?.bg ?? ROLE_COLORS[2].bg,
+                      color: ROLE_COLORS[u.role]?.text ?? ROLE_COLORS[2].text,
+                    }}
                   >
                     {ROLE_MAP[u.role] || 'Unknown'}
                   </span>
@@ -293,7 +372,10 @@ export function AdminDashboard() {
                           ) : (
                             <span
                               className="text-xs px-2.5 py-1 rounded-full font-medium"
-                              style={ROLE_COLORS[u.role] || ROLE_COLORS[2]}
+                              style={{
+                                backgroundColor: ROLE_COLORS[u.role]?.bg ?? ROLE_COLORS[2].bg,
+                                color: ROLE_COLORS[u.role]?.text ?? ROLE_COLORS[2].text,
+                              }}
                             >
                               {ROLE_MAP[u.role] || 'Unknown'}
                             </span>
@@ -326,11 +408,12 @@ export function AdminDashboard() {
                                 </button>
                                 <button
                                   onClick={() => handleDeleteUser(u.id)}
-                                  disabled={deletingUserId === u.id}
-                                  className="flex items-center gap-1 text-xs px-2.5 py-1 border border-red-200 text-red-600 rounded hover:bg-red-50 transition-colors disabled:opacity-50"
+                                  disabled={!u.isActive || deletingUserId === u.id}
+                                  className="flex items-center gap-1 text-xs px-2.5 py-1 border rounded transition-colors disabled:opacity-50"
+                                  style={u.isActive ? { borderColor: '#fecaca', color: '#b91c1c' } : { borderColor: '#d1d5db', color: '#6b7280', backgroundColor: '#f8fafc' }}
                                 >
                                   {deletingUserId === u.id ? <Loader size={11} className="animate-spin" /> : <Trash2 size={11} />}
-                                  Delete
+                                  {u.isActive ? 'Deactivate' : 'Inactive'}
                                 </button>
                               </>
                             )}
@@ -338,6 +421,56 @@ export function AdminDashboard() {
                               <span className="text-xs text-muted-foreground italic">(you)</span>
                             )}
                           </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!loading && activeTab === 'samples' && (
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <div className="text-sm text-muted-foreground">{samples.length} sample{samples.length !== 1 ? 's' : ''}</div>
+            </div>
+            {samples.length === 0 ? (
+              <div className="text-center py-16 border-2 border-dashed border-border rounded-2xl">
+                <Database size={40} className="mx-auto text-muted-foreground opacity-40 mb-3" />
+                <p className="text-muted-foreground">No samples available.</p>
+              </div>
+            ) : (
+              <div className="border border-border rounded-xl bg-card overflow-hidden">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border" style={{ backgroundColor: '#f8f7ff' }}>
+                      <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Title</th>
+                      <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Folder</th>
+                      <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Status</th>
+                      <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Created</th>
+                      <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {samples.map(s => (
+                      <tr key={s.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                        <td className="px-6 py-4 text-sm font-medium">{s.title}</td>
+                        <td className="px-6 py-4 text-sm text-muted-foreground">
+                          {s.folder?.name || `Folder #${s.folderId}`}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-muted-foreground">{s.status || 'N/A'}</td>
+                        <td className="px-6 py-4 text-sm text-muted-foreground">{new Date(s.createdAt).toLocaleDateString()}</td>
+                        <td className="px-6 py-4">
+                          <button
+                            onClick={() => handleDeleteSample(s.id)}
+                            disabled={deletingSampleId === s.id}
+                            className="flex items-center gap-1 text-xs px-2.5 py-1 border border-red-200 text-red-600 rounded hover:bg-red-50 transition-colors disabled:opacity-50"
+                          >
+                            {deletingSampleId === s.id ? <Loader size={11} className="animate-spin" /> : <Trash2 size={11} />}
+                            Delete
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -381,12 +514,70 @@ export function AdminDashboard() {
                     {c.description && (
                       <p className="text-sm text-muted-foreground mb-2">{c.description}</p>
                     )}
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      <span>{c.folders?.length || 0} folders</span>
-                      <span>{c.downloadCount || 0} downloads</span>
+                    <div className="flex items-center justify-between gap-4 text-xs text-muted-foreground">
+                      <div>
+                        <span>{c.folders?.length || 0} folders</span>
+                        <span className="ml-3">{c.downloadCount || 0} downloads</span>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteCollection(c.id)}
+                        disabled={deletingCollectionId === c.id}
+                        className="flex items-center gap-1 text-xs px-2.5 py-1 border border-red-200 text-red-600 rounded hover:bg-red-50 transition-colors disabled:opacity-50"
+                      >
+                        {deletingCollectionId === c.id ? <Loader size={11} className="animate-spin" /> : <Trash2 size={11} />}
+                        Delete
+                      </button>
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!loading && activeTab === 'folders' && (
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <div className="text-sm text-muted-foreground">{folders.length} folder{folders.length !== 1 ? 's' : ''}</div>
+            </div>
+            {folders.length === 0 ? (
+              <div className="text-center py-16 border-2 border-dashed border-border rounded-2xl">
+                <Layers size={40} className="mx-auto text-muted-foreground opacity-40 mb-3" />
+                <p className="text-muted-foreground">No folders available.</p>
+              </div>
+            ) : (
+              <div className="border border-border rounded-xl bg-card overflow-hidden">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border" style={{ backgroundColor: '#f8f7ff' }}>
+                      <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Name</th>
+                      <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Collection</th>
+                      <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Parent</th>
+                      <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Created</th>
+                      <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {folders.map(f => (
+                      <tr key={f.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                        <td className="px-6 py-4 text-sm font-medium">{f.name}</td>
+                        <td className="px-6 py-4 text-sm text-muted-foreground">Collection #{f.collectionId}</td>
+                        <td className="px-6 py-4 text-sm text-muted-foreground">{f.parentId ? `Folder #${f.parentId}` : 'Root'}</td>
+                        <td className="px-6 py-4 text-sm text-muted-foreground">{f.createdAt ? new Date(f.createdAt).toLocaleDateString() : '-'}</td>
+                        <td className="px-6 py-4">
+                          <button
+                            onClick={() => handleDeleteFolder(f.id)}
+                            disabled={deletingFolderId === f.id}
+                            className="flex items-center gap-1 text-xs px-2.5 py-1 border border-red-200 text-red-600 rounded hover:bg-red-50 transition-colors disabled:opacity-50"
+                          >
+                            {deletingFolderId === f.id ? <Loader size={11} className="animate-spin" /> : <Trash2 size={11} />}
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
@@ -419,8 +610,18 @@ export function AdminDashboard() {
                     {g.description && (
                       <p className="text-sm text-muted-foreground mb-3">{g.description}</p>
                     )}
-                    <div className="text-xs text-muted-foreground">
-                      Created {new Date(g.createdAt).toLocaleDateString()} • By user #{g.createdBy}
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="text-xs text-muted-foreground">
+                        Created {new Date(g.createdAt).toLocaleDateString()} • By user #{g.createdBy}
+                      </div>
+                      <button
+                        onClick={() => handleDeleteGroup(g.id)}
+                        disabled={deletingGroupId === g.id}
+                        className="flex items-center gap-1 text-xs px-2.5 py-1 border border-red-200 text-red-600 rounded hover:bg-red-50 transition-colors disabled:opacity-50"
+                      >
+                        {deletingGroupId === g.id ? <Loader size={11} className="animate-spin" /> : <Trash2 size={11} />}
+                        Delete
+                      </button>
                     </div>
                   </div>
                 ))}

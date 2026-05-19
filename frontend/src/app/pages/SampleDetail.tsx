@@ -6,7 +6,8 @@ import {
 } from 'lucide-react';
 import {
   fetchSampleById, downloadSample, downloadSampleFiles,
-  fetchSampleFileBlob, triggerDownload, parseMetadata, type Sample as ApiSample, type ResourceFile
+  fetchSampleFileBlob, triggerDownload, parseMetadata, fetchUserById,
+  type Sample as ApiSample, type ResourceFile, type UserPublic
 } from '../services/api';
 
 interface FileItem {
@@ -14,7 +15,7 @@ interface FileItem {
   name: string;
   type: 'Image' | 'Video' | 'Document' | 'File';
   size: string;
-  url: string;
+  url?: string;
 }
 
 function getFileType(fileName: string): 'Image' | 'Video' | 'Document' | 'File' {
@@ -30,6 +31,7 @@ export function SampleDetail() {
   const navigate = useNavigate();
 
   const [sample, setSample] = useState<ApiSample | null>(null);
+  const [user, setUser] = useState<UserPublic | null>(null);
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,11 +41,27 @@ export function SampleDetail() {
   const [downloadingAll, setDownloadingAll] = useState(false);
   const [downloadingFileId, setDownloadingFileId] = useState<number | null>(null);
 
+  const selectedResourceFile = sample?.files?.find(f => f.id === selectedFile?.id) ?? null;
   const additionalMetadata = sample
     ? Object.entries(parseMetadata(sample.metadata || '')).filter(
         ([key]) => !['EyeSide', 'Gender', 'Age', 'City', 'Status', 'Profession', 'Notes'].includes(key)
       )
     : [];
+
+  const selectedFileMetadata = selectedResourceFile ? parseMetadata(selectedResourceFile.metadata || '') : {};
+  const selectedFileAdditionalMetadata = selectedResourceFile
+    ? Object.entries(selectedFileMetadata).filter(
+        ([key]) => !['EyeSide', 'Gender', 'Age', 'City', 'Status', 'Profession', 'Notes'].includes(key)
+      ) as [string, unknown][]
+    : [];
+
+  const getSelectedFileMetadataValue = (key: string) => {
+    if (!selectedResourceFile) return null;
+    const computedValue = (selectedResourceFile as any)[key];
+    if (computedValue !== undefined && computedValue !== null) return computedValue;
+    const rawValue = selectedFileMetadata[key] ?? selectedFileMetadata[key.toLowerCase()];
+    return rawValue ?? null;
+  };
 
   useEffect(() => {
     async function load() {
@@ -52,6 +70,15 @@ export function SampleDetail() {
       try {
         const data = await fetchSampleById(parseInt(id!));
         setSample(data);
+
+        // Fetch user information
+        try {
+          const userData = await fetchUserById(data.createdBy);
+          setUser(userData);
+        } catch (userErr) {
+          console.warn('Failed to load user information:', userErr);
+          setUser(null);
+        }
 
         const mapped: FileItem[] = (data.files || []).map((f: ResourceFile) => ({
           id: f.id,
@@ -248,8 +275,24 @@ export function SampleDetail() {
               </button>
             </div>
           </div>
+          <div className="flex flex-wrap gap-4 text-sm text-muted-foreground mb-3">
+            {sample.downloadCount !== undefined && (
+              <span className="inline-flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1">
+                <Download size={14} />
+                {sample.downloadCount} downloads
+              </span>
+            )}
+            {sample.viewCount !== undefined && (
+              <span className="inline-flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1">
+                <span className="text-sm">👁️</span>
+                {sample.viewCount} views
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <span>By User #{sample.createdBy}</span>
+            <span>
+              By {user ? `${user.firstName} ${user.lastName}` : `User #${sample.createdBy}`}
+            </span>
             <span>•</span>
             <span>{new Date(sample.createdAt).toLocaleDateString()}</span>
             {sample.folderId && (
@@ -297,30 +340,37 @@ export function SampleDetail() {
             {/* Metadata */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="border border-border rounded-xl bg-card p-5 shadow-sm">
-                <h3 className="font-semibold mb-4">Clinical Metadata</h3>
+                <h3 className="font-semibold mb-4">File Metadata</h3>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                  {[
-                    ['Gender', sample.gender],
-                    ['Age', sample.age ? `${sample.age} years` : null],
-                    ['City', sample.city],
-                    ['Condition', sample.status],
-                    ['Eye Side', sample.eyeSide],
-                    ['Profession', sample.profession],
-                  ].filter(([, v]) => v).map(([k, v]) => (
-                    <div key={k as string}>
-                      <div className="text-xs text-muted-foreground font-medium mb-0.5">{k}</div>
-                      <div className="text-sm font-medium">{v}</div>
-                    </div>
-                  ))}
-                  {!sample.gender && !sample.age && !sample.city && !sample.status && (
-                    <div className="col-span-2 text-sm text-muted-foreground italic">No metadata provided</div>
+                  {selectedResourceFile ? (
+                    [
+                      ['Gender', getSelectedFileMetadataValue('gender')],
+                      ['Age', getSelectedFileMetadataValue('age') ? `${getSelectedFileMetadataValue('age')} years` : null],
+                      ['City', getSelectedFileMetadataValue('city')],
+                      ['Condition', getSelectedFileMetadataValue('status')],
+                      ['Eye Side', getSelectedFileMetadataValue('eyeSide')],
+                      ['Profession', getSelectedFileMetadataValue('profession')],
+                    ].filter(([, v]) => v).map(([k, v]) => (
+                      <div key={k as string}>
+                        <div className="text-xs text-muted-foreground font-medium mb-0.5">{k}</div>
+                        <div className="text-sm font-medium">{v}</div>
+                      </div>
+                    ))
+                  ) : null}
+
+                  {!selectedResourceFile && (
+                    <div className="col-span-2 text-sm text-muted-foreground italic">Select a file to view metadata</div>
+                  )}
+
+                  {selectedResourceFile && selectedFileAdditionalMetadata.length === 0 && !getSelectedFileMetadataValue('gender') && !getSelectedFileMetadataValue('age') && !getSelectedFileMetadataValue('city') && !getSelectedFileMetadataValue('status') && !getSelectedFileMetadataValue('eyeSide') && !getSelectedFileMetadataValue('profession') && (
+                    <div className="col-span-2 text-sm text-muted-foreground italic">No metadata provided for this file</div>
                   )}
                 </div>
-                {additionalMetadata.length > 0 && (
+                {selectedResourceFile && selectedFileAdditionalMetadata.length > 0 && (
                   <div className="col-span-2 mt-4 border-t border-border pt-4">
                     <div className="text-xs text-muted-foreground font-medium mb-3">Additional metadata</div>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                      {additionalMetadata.map(([key, value]) => (
+                      {selectedFileAdditionalMetadata.map(([key, value]) => (
                         <div key={key}>
                           <div className="text-xs text-muted-foreground font-medium mb-0.5">{key}</div>
                           <div className="text-sm font-medium break-words">{String(value)}</div>
@@ -346,6 +396,12 @@ export function SampleDetail() {
                     <div>
                       <div className="text-xs text-muted-foreground font-medium mb-0.5">Downloads</div>
                       <div className="text-sm font-medium">{sample.downloadCount}</div>
+                    </div>
+                  )}
+                  {sample.viewCount !== undefined && (
+                    <div>
+                      <div className="text-xs text-muted-foreground font-medium mb-0.5">Views</div>
+                      <div className="text-sm font-medium">{sample.viewCount}</div>
                     </div>
                   )}
                   {sample.notes && (
@@ -386,11 +442,11 @@ export function SampleDetail() {
                       onClick={() => setSelectedFile(file)}
                       className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all cursor-pointer
                         ${selectedFile?.id === file.id
-                          ? 'border-[#9481ff] bg-[#f8f7ff] ring-1 ring-[#9481ff]/20'
+                          ? 'border-primary bg-primary/10 ring-1 ring-primary/20'
                           : 'border-border hover:bg-muted/40 hover:border-[#b8b8fe]'}`}
                     >
                       <div className={`w-9 h-9 shrink-0 rounded-lg flex items-center justify-center
-                        ${selectedFile?.id === file.id ? 'bg-[#9481ff]/10' : 'bg-muted'}`}>
+                        ${selectedFile?.id === file.id ? 'bg-primary/20' : 'bg-muted'}`}>
                         {getFileIcon(file.type)}
                       </div>
                       <div className="min-w-0 flex-1">

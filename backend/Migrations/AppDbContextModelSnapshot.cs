@@ -34,7 +34,7 @@ namespace Sarab_Platform.Migrations
 
                     b.HasIndex("TagsId");
 
-                    b.ToTable("SampleTag", (string)null);
+                    b.ToTable("SampleTag");
                 });
 
             modelBuilder.Entity("SarabPlatform.Models.Collection", b =>
@@ -88,7 +88,7 @@ namespace Sarab_Platform.Migrations
 
                     b.HasIndex("GroupId");
 
-                    b.ToTable("Collections", (string)null);
+                    b.ToTable("Collections");
                 });
 
             modelBuilder.Entity("SarabPlatform.Models.CollectionTemplate", b =>
@@ -128,7 +128,7 @@ namespace Sarab_Platform.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("CollectionTemplates", (string)null);
+                    b.ToTable("CollectionTemplates");
                 });
 
             modelBuilder.Entity("SarabPlatform.Models.Folder", b =>
@@ -172,7 +172,7 @@ namespace Sarab_Platform.Migrations
 
                     b.HasIndex("ParentId");
 
-                    b.ToTable("Folders", (string)null);
+                    b.ToTable("Folders");
                 });
 
             modelBuilder.Entity("SarabPlatform.Models.Group", b =>
@@ -204,7 +204,7 @@ namespace Sarab_Platform.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Groups", (string)null);
+                    b.ToTable("Groups");
                 });
 
             modelBuilder.Entity("SarabPlatform.Models.GroupMember", b =>
@@ -233,7 +233,7 @@ namespace Sarab_Platform.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("GroupMembers", (string)null);
+                    b.ToTable("GroupMembers");
                 });
 
             modelBuilder.Entity("SarabPlatform.Models.ResourceFile", b =>
@@ -264,6 +264,9 @@ namespace Sarab_Platform.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<string>("Metadata")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("SampleId")
                         .HasColumnType("int");
 
@@ -280,7 +283,7 @@ namespace Sarab_Platform.Migrations
 
                     b.HasIndex("SampleId");
 
-                    b.ToTable("Files", (string)null);
+                    b.ToTable("Files");
                 });
 
             modelBuilder.Entity("SarabPlatform.Models.Sample", b =>
@@ -313,7 +316,6 @@ namespace Sarab_Platform.Migrations
                         .HasColumnType("bit");
 
                     b.Property<string>("Metadata")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Title")
@@ -326,13 +328,18 @@ namespace Sarab_Platform.Migrations
                     b.Property<int?>("UserId")
                         .HasColumnType("int");
 
+                    b.Property<int>("ViewCount")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("CreatedBy");
 
                     b.HasIndex("FolderId");
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Samples", (string)null);
+                    b.ToTable("Samples");
                 });
 
             modelBuilder.Entity("SarabPlatform.Models.Tag", b =>
@@ -348,7 +355,7 @@ namespace Sarab_Platform.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Tags", (string)null);
+                    b.ToTable("Tags");
                 });
 
             modelBuilder.Entity("SarabPlatform.Models.User", b =>
@@ -364,18 +371,9 @@ namespace Sarab_Platform.Migrations
                         .HasColumnType("datetime2")
                         .HasDefaultValueSql("GETUTCDATE()");
 
-                    b.Property<DateTime?>("DeActivatedAt")
-                        .HasColumnType("datetime2");
-
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
-
-                    b.Property<DateTime?>("EmailVerifiedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("FailedLoginAttempts")
-                        .HasColumnType("int");
 
                     b.Property<string>("FirstName")
                         .IsRequired()
@@ -390,17 +388,8 @@ namespace Sarab_Platform.Migrations
                     b.Property<bool>("IsVerified")
                         .HasColumnType("bit");
 
-                    b.Property<DateTime?>("LastLoginAt")
-                        .HasColumnType("datetime2");
-
                     b.Property<string>("LastName")
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("LastPasswordChangeAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("LockedUntil")
-                        .HasColumnType("datetime2");
 
                     b.Property<string>("PasswordHash")
                         .IsRequired()
@@ -420,7 +409,7 @@ namespace Sarab_Platform.Migrations
                     b.HasIndex("Email")
                         .IsUnique();
 
-                    b.ToTable("Users", (string)null);
+                    b.ToTable("Users");
                 });
 
             modelBuilder.Entity("SarabPlatform.Models.UserDocument", b =>
@@ -467,7 +456,7 @@ namespace Sarab_Platform.Migrations
                     b.HasIndex("UserId")
                         .IsUnique();
 
-                    b.ToTable("UserDocuments", (string)null);
+                    b.ToTable("UserDocuments");
                 });
 
             modelBuilder.Entity("SarabPlatform.Models.UserSession", b =>
@@ -506,7 +495,7 @@ namespace Sarab_Platform.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("UserSessions", (string)null);
+                    b.ToTable("UserSessions");
                 });
 
             modelBuilder.Entity("SampleTag", b =>
@@ -598,6 +587,12 @@ namespace Sarab_Platform.Migrations
 
             modelBuilder.Entity("SarabPlatform.Models.Sample", b =>
                 {
+                    b.HasOne("SarabPlatform.Models.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("SarabPlatform.Models.Folder", "Folder")
                         .WithMany("Samples")
                         .HasForeignKey("FolderId");
@@ -605,6 +600,8 @@ namespace Sarab_Platform.Migrations
                     b.HasOne("SarabPlatform.Models.User", null)
                         .WithMany("Samples")
                         .HasForeignKey("UserId");
+
+                    b.Navigation("CreatedByUser");
 
                     b.Navigation("Folder");
                 });

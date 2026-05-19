@@ -33,6 +33,7 @@ namespace SarabPlatform.Controllers
         {
             return _context.Samples
                 .Where(s => !s.IsDeleted)
+                .Include(s => s.CreatedByUser)
                 .Include(s => s.Files.Where(f => !f.IsDeleted))
                 .Include(s => s.Tags)
                 .Include(s => s.Folder!).ThenInclude(f => f.Collection!);
@@ -48,7 +49,13 @@ namespace SarabPlatform.Controllers
 
         private static bool IsPrivateCollection(Collection collection)
         {
-            return string.Equals(collection.Name, "Private", StringComparison.OrdinalIgnoreCase);
+            return collection.OwnerType == OwnerType.User &&
+                   string.Equals(collection.Name, "Private Collection", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool UserIsGroupMember(int userId, int groupId)
+        {
+            return _context.GroupMembers.Any(gm => gm.GroupId == groupId && gm.UserId == userId);
         }
 
         [HttpGet]
@@ -60,7 +67,11 @@ namespace SarabPlatform.Controllers
 
             if (!IsAdminUser())
             {
-                query = query.Where(s => s.Folder != null && s.Folder.Collection != null && (s.Folder.Collection.Name != "Private" || (s.Folder.Collection.OwnerType == OwnerType.User && s.Folder.Collection.OwnerId == currentUserId)));
+                query = query.Where(s => s.Folder != null && s.Folder.Collection != null && (
+                    (s.Folder.Collection.OwnerType == OwnerType.User && s.Folder.Collection.Name != "Private Collection") ||
+                    (s.Folder.Collection.OwnerType == OwnerType.User && s.Folder.Collection.OwnerId == currentUserId) ||
+                    (s.Folder.Collection.OwnerType == OwnerType.Group && _context.GroupMembers.Any(gm => gm.GroupId == s.Folder.Collection.OwnerId && gm.UserId == currentUserId))
+                ));
             }
 
             var samples = await query.ToListAsync();
@@ -77,12 +88,19 @@ namespace SarabPlatform.Controllers
                 var query = GetActiveSamplesQuery().Where(s => s.Id == id);
                 if (!IsAdminUser())
                 {
-                    query = query.Where(s => s.Folder != null && s.Folder.Collection != null && (s.Folder.Collection.Name != "Private" || (s.Folder.Collection.OwnerType == OwnerType.User && s.Folder.Collection.OwnerId == currentUserId)));
+                    query = query.Where(s => s.Folder != null && s.Folder.Collection != null && (
+                        (s.Folder.Collection.OwnerType == OwnerType.User && s.Folder.Collection.Name != "Private Collection") ||
+                        (s.Folder.Collection.OwnerType == OwnerType.User && s.Folder.Collection.OwnerId == currentUserId) ||
+                        (s.Folder.Collection.OwnerType == OwnerType.Group && _context.GroupMembers.Any(gm => gm.GroupId == s.Folder.Collection.OwnerId && gm.UserId == currentUserId))
+                    ));
                 }
 
                 var sample = await query.FirstOrDefaultAsync();
                 if (sample == null)
                     return NotFound();
+
+                sample.ViewCount++;
+                await _context.SaveChangesAsync();
 
                 return Ok(sample);
             }
@@ -103,9 +121,11 @@ namespace SarabPlatform.Controllers
 
                 if (!IsAdminUser())
                 {
-                    query = query.Where(s => s.Folder != null && s.Folder.Collection != null &&
-                        (s.Folder.Collection.Name != "Private" ||
-                         (s.Folder.Collection.OwnerType == OwnerType.User && s.Folder.Collection.OwnerId == currentUserId)));
+                    query = query.Where(s => s.Folder != null && s.Folder.Collection != null && (
+                        (s.Folder.Collection.OwnerType == OwnerType.User && s.Folder.Collection.Name != "Private Collection") ||
+                        (s.Folder.Collection.OwnerType == OwnerType.User && s.Folder.Collection.OwnerId == currentUserId) ||
+                        (s.Folder.Collection.OwnerType == OwnerType.Group && _context.GroupMembers.Any(gm => gm.GroupId == s.Folder.Collection.OwnerId && gm.UserId == currentUserId))
+                    ));
                 }
 
                 var samples = await query.ToListAsync();
@@ -114,6 +134,24 @@ namespace SarabPlatform.Controllers
                 if (dto.TagIds != null && dto.TagIds.Any())
                 {
                     filtered = filtered.Where(s => s.Tags != null && dto.TagIds.All(tagId => s.Tags.Any(t => t.Id == tagId)));
+                }
+
+                if (dto.FileTypes != null && dto.FileTypes.Any())
+                {
+                    filtered = filtered.Where(s => s.Files != null && dto.FileTypes.Any(fileType =>
+                        s.Files.Any(f => f.FileType.ToString().Equals(fileType, StringComparison.OrdinalIgnoreCase))));
+                }
+
+                if (!string.IsNullOrWhiteSpace(dto.ContributorName))
+                {
+                    filtered = filtered.Where(s => s.CreatedByUser != null &&
+                        (s.CreatedByUser.FirstName + " " + s.CreatedByUser.LastName)
+                            .Contains(dto.ContributorName, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (!string.IsNullOrWhiteSpace(dto.MetadataKey) && !string.IsNullOrWhiteSpace(dto.MetadataValue))
+                {
+                    filtered = filtered.Where(s => GetMetadataValue(s, dto.MetadataKey)?.Contains(dto.MetadataValue, StringComparison.OrdinalIgnoreCase) == true);
                 }
 
                 if (!string.IsNullOrWhiteSpace(dto.Gender))
@@ -177,12 +215,28 @@ namespace SarabPlatform.Controllers
 
         private static string? GetMetadataValue(Sample sample, string key)
         {
-            if (string.IsNullOrWhiteSpace(sample.Metadata))
+            if (!string.IsNullOrWhiteSpace(sample.Metadata))
+            {
+                try
+                {
+                    var metadata = JsonSerializer.Deserialize<Dictionary<string, object>>(sample.Metadata);
+                    if (metadata != null && metadata.TryGetValue(key, out var value))
+                    {
+                        return value?.ToString();
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            var firstFile = sample.Files?.FirstOrDefault();
+            if (firstFile == null || string.IsNullOrWhiteSpace(firstFile.Metadata))
                 return null;
 
             try
             {
-                var metadata = JsonSerializer.Deserialize<Dictionary<string, object>>(sample.Metadata);
+                var metadata = JsonSerializer.Deserialize<Dictionary<string, object>>(firstFile.Metadata);
                 if (metadata != null && metadata.TryGetValue(key, out var value))
                 {
                     return value?.ToString();
@@ -214,19 +268,36 @@ namespace SarabPlatform.Controllers
             if (!string.IsNullOrWhiteSpace(sample.Metadata) && sample.Metadata.Contains(value, StringComparison.OrdinalIgnoreCase))
                 return true;
 
+            if (sample.Files != null && sample.Files.Any(f => !string.IsNullOrWhiteSpace(f.Metadata) && f.Metadata.Contains(value, StringComparison.OrdinalIgnoreCase)))
+                return true;
+
             if (sample.Tags != null && sample.Tags.Any(t => !string.IsNullOrWhiteSpace(t.Name) && t.Name.Contains(value, StringComparison.OrdinalIgnoreCase)))
                 return true;
 
             if (sample.Files != null && sample.Files.Any(f => !string.IsNullOrWhiteSpace(f.FileName) && f.FileName.Contains(value, StringComparison.OrdinalIgnoreCase)))
                 return true;
 
+            // Enhanced file type search
             if (sample.Files != null)
             {
-                if ((value == "image" || value == "images") && sample.Files.Any(f => f.FileType == FileType.Image))
+                if ((value == "image" || value == "images" || value == "photo" || value == "photos" || value == "picture" || value == "pictures") &&
+                    sample.Files.Any(f => f.FileType == FileType.Image))
                     return true;
-                if ((value == "video" || value == "videos") && sample.Files.Any(f => f.FileType == FileType.Video))
+                if ((value == "video" || value == "videos" || value == "movie" || value == "movies") &&
+                    sample.Files.Any(f => f.FileType == FileType.Video))
                     return true;
-                if ((value == "document" || value == "documents") && sample.Files.Any(f => f.FileType == FileType.Document))
+                if ((value == "document" || value == "documents" || value == "doc" || value == "docs" || value == "file" || value == "files") &&
+                    sample.Files.Any(f => f.FileType == FileType.Document))
+                    return true;
+            }
+
+            // Contributor name search
+            if (sample.CreatedByUser != null)
+            {
+                var fullName = $"{sample.CreatedByUser.FirstName} {sample.CreatedByUser.LastName}".ToLowerInvariant();
+                if (fullName.Contains(value) ||
+                    sample.CreatedByUser.FirstName.Contains(value, StringComparison.OrdinalIgnoreCase) ||
+                    sample.CreatedByUser.LastName.Contains(value, StringComparison.OrdinalIgnoreCase))
                     return true;
             }
 
@@ -240,7 +311,11 @@ namespace SarabPlatform.Controllers
             var sampleQuery = GetActiveSamplesQuery().Where(s => s.Id == sampleId);
             if (!IsAdminUser())
             {
-                sampleQuery = sampleQuery.Where(s => s.Folder != null && s.Folder.Collection != null && (s.Folder.Collection.Name != "Private" || (s.Folder.Collection.OwnerType == OwnerType.User && s.Folder.Collection.OwnerId == currentUserId)));
+                sampleQuery = sampleQuery.Where(s => s.Folder != null && s.Folder.Collection != null && (
+                    (s.Folder.Collection.OwnerType == OwnerType.User && s.Folder.Collection.Name != "Private Collection") ||
+                    (s.Folder.Collection.OwnerType == OwnerType.User && s.Folder.Collection.OwnerId == currentUserId) ||
+                    (s.Folder.Collection.OwnerType == OwnerType.Group && _context.GroupMembers.Any(gm => gm.GroupId == s.Folder.Collection.OwnerId && gm.UserId == currentUserId))
+                ));
             }
 
             var sample = await sampleQuery.FirstOrDefaultAsync();
@@ -335,25 +410,24 @@ namespace SarabPlatform.Controllers
             if (folder == null)
                 return NotFound("Folder Not Found");
 
-            var metadataObject = new
+            List<Dictionary<string, object>>? fileMetadataList = null;
+            if (!string.IsNullOrWhiteSpace(dto.FileMetadataJson))
             {
-                EyeSide = dto.EyeSide,
-                Gender = dto.Gender,
-                Age = dto.Age,
-                city = dto.City,
-                Status = dto.Status,
-                profession = dto.Profession,
-                notes = dto.Notes
-            };
-
-            var metadataJson = JsonSerializer.Serialize(metadataObject);
+                try
+                {
+                    fileMetadataList = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(dto.FileMetadataJson);
+                }
+                catch
+                {
+                    fileMetadataList = null;
+                }
+            }
 
             var currentUserId = GetCurrentUserId();
             var sample = new Sample
             {
                 Title = dto.Title,
                 Description = dto.Description,
-                Metadata = metadataJson,
                 FolderId = dto.FolderId,
                 CreatedBy = currentUserId,
                 Files = new List<ResourceFile>(),
@@ -362,18 +436,12 @@ namespace SarabPlatform.Controllers
 
             if (dto.Tags != null && dto.Tags.Any())
             {
-                foreach (var rawTag in dto.Tags.Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t.Trim()).Distinct(StringComparer.OrdinalIgnoreCase))
+                foreach (var tagId in dto.Tags.Distinct())
                 {
-                    var existingTag = await _context.Tags.FirstOrDefaultAsync(t => t.Name == rawTag);
+                    var existingTag = await _context.Tags.FirstOrDefaultAsync(t => t.Id == tagId);
                     if (existingTag != null)
                     {
                         sample.Tags.Add(existingTag);
-                    }
-                    else
-                    {
-                        var newTag = new Tag { Name = rawTag };
-                        sample.Tags.Add(newTag);
-                        _context.Tags.Add(newTag);
                     }
                 }
             }
@@ -391,11 +459,22 @@ namespace SarabPlatform.Controllers
 
             Directory.CreateDirectory(uploadPath);
 
-            foreach (var file in dto.Files)
+            for (var fileIndex = 0; fileIndex < dto.Files.Count; fileIndex++)
             {
+                var file = dto.Files[fileIndex];
                 try
                 {
                     var result = await _fileService.SaveFileAsync(file, uploadPath);
+                    string? fileMetadataJson = null;
+                    if (fileMetadataList != null && fileIndex < fileMetadataList.Count)
+                    {
+                        var metadataEntry = fileMetadataList[fileIndex];
+                        if (metadataEntry.Any())
+                        {
+                            fileMetadataJson = JsonSerializer.Serialize(metadataEntry);
+                        }
+                    }
+
                     var resourceFile = new ResourceFile
                     {
                         FileName = Path.GetFileName(result.path),
@@ -405,6 +484,7 @@ namespace SarabPlatform.Controllers
                         Size = (int)file.Length,
                         UploadedBy = currentUserId,
                         UploadedAt = DateTime.UtcNow,
+                        Metadata = fileMetadataJson
                     };
                     sample.Files.Add(resourceFile);
                     _context.Files.Add(resourceFile);
@@ -416,11 +496,7 @@ namespace SarabPlatform.Controllers
             }
 
             await _context.SaveChangesAsync();
-            return Ok(new
-            {
-                message = "Sample created successfully",
-                sampleId = sample.Id
-            });
+            return Ok(sample);
         }
 
         [HttpPut("{id}")]
@@ -447,9 +523,37 @@ namespace SarabPlatform.Controllers
                 folder = await _context.Folders.FirstOrDefaultAsync(f => f.Id == sample.FolderId.Value && !f.IsDeleted);
             }
 
-            var metadata = string.IsNullOrWhiteSpace(sample.Metadata)
-                ? new Dictionary<string, object>()
-                : JsonSerializer.Deserialize<Dictionary<string, object>>(sample.Metadata) ?? new Dictionary<string, object>();
+            // Update metadata on the first file
+            var firstFile = sample.Files?.FirstOrDefault(f => !f.IsDeleted);
+            if (firstFile != null)
+            {
+                var metadata = string.IsNullOrWhiteSpace(firstFile.Metadata)
+                    ? new Dictionary<string, object>()
+                    : JsonSerializer.Deserialize<Dictionary<string, object>>(firstFile.Metadata) ?? new Dictionary<string, object>();
+
+                if (!string.IsNullOrWhiteSpace(dto.EyeSide))
+                    metadata["EyeSide"] = dto.EyeSide;
+
+                if (!string.IsNullOrWhiteSpace(dto.Gender))
+                    metadata["Gender"] = dto.Gender;
+
+                if (dto.Age.HasValue)
+                    metadata["Age"] = dto.Age.Value;
+
+                if (!string.IsNullOrWhiteSpace(dto.City))
+                    metadata["City"] = dto.City;
+
+                if (!string.IsNullOrWhiteSpace(dto.Status))
+                    metadata["Status"] = dto.Status;
+
+                if (!string.IsNullOrWhiteSpace(dto.Profession))
+                    metadata["Profession"] = dto.Profession;
+
+                if (!string.IsNullOrWhiteSpace(dto.Notes))
+                    metadata["Notes"] = dto.Notes;
+
+                firstFile.Metadata = JsonSerializer.Serialize(metadata);
+            }
 
             if (!string.IsNullOrWhiteSpace(dto.Title))
                 sample.Title = dto.Title;
@@ -457,28 +561,6 @@ namespace SarabPlatform.Controllers
             if (dto.Description != null)
                 sample.Description = dto.Description;
 
-            if (!string.IsNullOrWhiteSpace(dto.EyeSide))
-                metadata["EyeSide"] = dto.EyeSide;
-
-            if (!string.IsNullOrWhiteSpace(dto.Gender))
-                metadata["Gender"] = dto.Gender;
-
-            if (dto.Age.HasValue)
-                metadata["Age"] = dto.Age.Value;
-
-            if (!string.IsNullOrWhiteSpace(dto.City))
-                metadata["City"] = dto.City;
-
-            if (!string.IsNullOrWhiteSpace(dto.Status))
-                metadata["Status"] = dto.Status;
-
-            if (!string.IsNullOrWhiteSpace(dto.Profession))
-                metadata["Profession"] = dto.Profession;
-
-            if (!string.IsNullOrWhiteSpace(dto.Notes))
-                metadata["Notes"] = dto.Notes;
-
-            sample.Metadata = JsonSerializer.Serialize(metadata);
             sample.UpdateAt = DateTime.UtcNow;
 
             var deletedFilesCount = 0;
@@ -555,6 +637,7 @@ namespace SarabPlatform.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Policy = "AdminOnly")]
         public async Task<IActionResult> DeleteSample(int id)
         {
             var sample = await _context.Samples.Include(s => s.Files).FirstOrDefaultAsync(s => s.Id == id);
@@ -582,10 +665,26 @@ namespace SarabPlatform.Controllers
             if(dto.FileIds == null || !dto.FileIds.Any())
                 return BadRequest("No files selected");
 
-            var sample = await _context.Samples.Include(s => s.Files).FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted);
+            var currentUserId = GetCurrentUserId();
+            var sample = await _context.Samples
+                .Include(s => s.Files)
+                .Include(s => s.Folder!).ThenInclude(f => f.Collection!)
+                .FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted);
 
             if (sample == null)
                 return NotFound("Sample not found");
+
+            if (!IsAdminUser())
+            {
+                var collection = sample.Folder?.Collection;
+                if (collection == null ||
+                    !((collection.OwnerType == OwnerType.User && collection.Name != "Private Collection") ||
+                      (collection.OwnerType == OwnerType.User && collection.OwnerId == currentUserId) ||
+                      (collection.OwnerType == OwnerType.Group && UserIsGroupMember(currentUserId, collection.OwnerId))))
+                {
+                    return NotFound("Sample not found");
+                }
+            }
             
             var files = await _context.Files.Where(f => dto.FileIds.Contains(f.Id) && !f.IsDeleted && f.SampleId == id).ToListAsync();
             if(files.Count != dto.FileIds.Count)
@@ -612,18 +711,96 @@ namespace SarabPlatform.Controllers
                 }
             }
 
+            sample.DownloadCount++;
+            await _context.SaveChangesAsync();
+
             memoryStream.Position = 0;
             return File(memoryStream.ToArray(), "application/zip", $"sample-{id}-files.zip");
         }
 
 
+        [HttpPost("download")]
+        public async Task<IActionResult> DownloadSamples([FromBody] DownloadSamplesDto dto)
+        {
+            if (dto.SampleIds == null || !dto.SampleIds.Any())
+                return BadRequest("No samples selected");
+
+            var currentUserId = GetCurrentUserId();
+            var query = GetActiveSamplesQuery().Where(s => dto.SampleIds.Contains(s.Id));
+            if (!IsAdminUser())
+            {
+                query = query.Where(s => s.Folder != null && s.Folder.Collection != null && (
+                    (s.Folder.Collection.OwnerType == OwnerType.User && s.Folder.Collection.Name != "Private Collection") ||
+                    (s.Folder.Collection.OwnerType == OwnerType.User && s.Folder.Collection.OwnerId == currentUserId) ||
+                    (s.Folder.Collection.OwnerType == OwnerType.Group && _context.GroupMembers.Any(gm => gm.GroupId == s.Folder.Collection.OwnerId && gm.UserId == currentUserId))
+                ));
+            }
+
+            var samples = await query.ToListAsync();
+            var distinctRequested = dto.SampleIds.Distinct().Count();
+            if (samples.Count != distinctRequested)
+                return BadRequest("Some samples were not found or are not accessible.");
+
+            using var memoryStream = new MemoryStream();
+            using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, true))
+            {
+                foreach (var sample in samples)
+                {
+                    var sampleFolder = $"sample-{sample.Id}";
+                    var metadataEntry = archive.CreateEntry($"{sampleFolder}/metadata.txt");
+                    using (var entryStream = metadataEntry.Open())
+                    using (var streamWriter = new StreamWriter(entryStream))
+                    {
+                        streamWriter.Write(sample.Metadata);
+                    }
+
+                    foreach (var file in sample.Files ?? new List<ResourceFile>())
+                    {
+                        if (!System.IO.File.Exists(file.FilePath))
+                            continue;
+
+                        var entry = archive.CreateEntry($"{sampleFolder}/{file.FileName}");
+                        using var entryStream = entry.Open();
+                        using FileStream fileStream = new FileStream(file.FilePath, FileMode.Open, FileAccess.Read);
+                        await fileStream.CopyToAsync(entryStream);
+                    }
+                }
+            }
+
+            foreach (var sample in samples)
+            {
+                sample.DownloadCount++;
+            }
+
+            await _context.SaveChangesAsync();
+
+            memoryStream.Position = 0;
+            return File(memoryStream.ToArray(), "application/zip", "samples.zip");
+        }
+
         [HttpPost("{id}/download")]
         public async Task<IActionResult> DownloadSample(int id)
         {
-            var sample = await _context.Samples.Include(s => s.Files).FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted);
+            var currentUserId = GetCurrentUserId();
+            var sample = await _context.Samples
+                .Include(s => s.Files)
+                .Include(s => s.Folder!).ThenInclude(f => f.Collection!)
+                .FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted);
 
             if (sample == null)
-                return NotFound("sample not found");
+                return NotFound("Sample not found");
+
+            if (!IsAdminUser())
+            {
+                var collection = sample.Folder?.Collection;
+                if (collection == null ||
+                    !((collection.OwnerType == OwnerType.User && collection.Name != "Private Collection") ||
+                      (collection.OwnerType == OwnerType.User && collection.OwnerId == currentUserId) ||
+                      (collection.OwnerType == OwnerType.Group && UserIsGroupMember(currentUserId, collection.OwnerId))))
+                {
+                    return NotFound("Sample not found");
+                }
+            }
 
             using var memoryStream = new MemoryStream();
 
@@ -647,6 +824,9 @@ namespace SarabPlatform.Controllers
                     await fileStream.CopyToAsync(entryStream);
                 }
             }
+
+            sample.DownloadCount++;
+            await _context.SaveChangesAsync();
 
             memoryStream.Position = 0;
             return File(memoryStream.ToArray(), "application/zip", $"sample-{id}.zip");

@@ -80,6 +80,12 @@ namespace SarabPlatform.Data
                 .WithMany(g => g.Collections)
                 .HasForeignKey(c => c.GroupId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<Sample>()
+                .HasOne(s => s.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(s => s.CreatedBy)
+                .OnDelete(DeleteBehavior.Restrict);
         }
 
 

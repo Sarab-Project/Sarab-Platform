@@ -53,7 +53,7 @@ namespace SarabPlatform.Controllers
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
-            CreateDefaultCollectionsForUser(user);
+            CreateDefaultCollectionsForUser(user, parsedRole);
             await _context.SaveChangesAsync();
 
             var response = new AuthResponseDto
@@ -73,23 +73,18 @@ namespace SarabPlatform.Controllers
             return CreatedAtAction(null, response);
         }
 
-        private void CreateDefaultCollectionsForUser(User user)
+        private void CreateDefaultCollectionsForUser(User user, UserRole role)
         {
-            _context.Collections.AddRange(
+            if (role != UserRole.Contributor)
+            {
+                return;
+            }
+
+            _context.Collections.Add(
                 new Collection
                 {
-                    Name = "Private",
-                    Description = "Private collection for this user",
-                    CreatedBy = user.Id,
-                    OwnerId = user.Id,
-                    OwnerType = OwnerType.User,
-                    TemplateId = 0,
-                    CreatedAt = DateTime.UtcNow
-                },
-                new Collection
-                {
-                    Name = "Public",
-                    Description = "Public collection visible to all users",
+                    Name = "Private Collection",
+                    Description = "Private collection visible only to this contributor",
                     CreatedBy = user.Id,
                     OwnerId = user.Id,
                     OwnerType = OwnerType.User,
@@ -127,6 +122,7 @@ namespace SarabPlatform.Controllers
                 RefreshToken = refreshToken,
                 ExpiresAt = DateTime.UtcNow.AddDays(30),
                 CreatedAt = DateTime.UtcNow,
+                LastLogin = DateTime.UtcNow,
                 IsRevoked = false
             };
             _context.UserSessions.Add(session);

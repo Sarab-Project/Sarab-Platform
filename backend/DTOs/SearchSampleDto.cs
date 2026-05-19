@@ -11,6 +11,10 @@ namespace SarabPlatform.Dto
         public int? MinAge { get; set; }
         public int? MaxAge { get; set; }
         public List<int>? TagIds { get; set; }
+        public List<string>? FileTypes { get; set; }
+        public string? ContributorName { get; set; }
+        public string? MetadataKey { get; set; }
+        public string? MetadataValue { get; set; }
         public int? Page { get; set; }
         public int? PageSize { get; set; }
     }

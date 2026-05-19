@@ -10,6 +10,14 @@ export interface ResourceFile {
   filePath: string;
   size: number;
   sampleId?: number;
+  metadata?: string;
+  eyeSide?: string | null;
+  gender?: string | null;
+  age?: number | null;
+  city?: string | null;
+  status?: string | null;
+  profession?: string | null;
+  notes?: string | null;
   isDeleted?: boolean;
   uploadedBy?: number;
   createdAt?: string;
@@ -25,6 +33,7 @@ export interface Sample {
   description: string | null;
   createdBy: number;
   downloadCount?: number;
+  viewCount?: number;
   metadata?: string;
   eyeSide?: string | null;
   gender: string | null;
@@ -126,6 +135,10 @@ export interface SearchSampleDto {
   maxAge?: number;
   keyword?: string;
   tagIds?: number[];
+  fileTypes?: string[];
+  contributorName?: string;
+  metadataKey?: string;
+  metadataValue?: string;
   page?: number;
   pageSize?: number;
 }
@@ -138,10 +151,7 @@ export interface DownloadFilesDto {
   fileIds: number[];
 }
 
-export interface UploadSampleDto {
-  title: string;
-  description?: string;
-  folderId: number;
+export interface FileMetadataInput {
   eyeSide?: string;
   gender?: string;
   age?: number;
@@ -149,8 +159,15 @@ export interface UploadSampleDto {
   status?: string;
   profession?: string;
   notes?: string;
-  tags?: string[];
+}
+
+export interface UploadSampleDto {
+  title: string;
+  description?: string;
+  folderId: number;
+  tags?: number[];
   files: File[];
+  fileMetadataJson?: string;
 }
 
 export interface CreateCollectionDto {
@@ -281,8 +298,6 @@ export async function reviewUserDocument(
   return handleResponse<{ message: string }>(res);
 }
 
-// ==================== SAMPLES API ====================
-
 export async function fetchSamples(): Promise<Sample[]> {
   const res = await fetch(`${API_BASE_URL}/samples`, {
     headers: getAuthHeaders(),
@@ -321,13 +336,12 @@ export async function uploadSample(dto: UploadSampleDto): Promise<Sample> {
   formData.append('title', dto.title);
   if (dto.description) formData.append('description', dto.description);
   formData.append('folderId', dto.folderId.toString());
-  if (dto.eyeSide) formData.append('eyeSide', dto.eyeSide);
-  if (dto.gender) formData.append('gender', dto.gender);
-  if (dto.age !== undefined) formData.append('age', dto.age.toString());
-  if (dto.city) formData.append('city', dto.city);
-  if (dto.status) formData.append('status', dto.status);
-  if (dto.profession) formData.append('profession', dto.profession);
-  if (dto.notes) formData.append('notes', dto.notes);
+  if (dto.tags && dto.tags.length > 0) {
+    dto.tags.forEach(tagId => formData.append('tags', tagId.toString()));
+  }
+  if (dto.fileMetadataJson) {
+    formData.append('fileMetadataJson', dto.fileMetadataJson);
+  }
   dto.files.forEach(file => formData.append('files', file));
 
   const res = await fetch(`${API_BASE_URL}/samples/upload`, {
@@ -336,6 +350,14 @@ export async function uploadSample(dto: UploadSampleDto): Promise<Sample> {
     body: formData,
   });
   return handleResponse<Sample>(res);
+}
+
+export async function deleteSample(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/samples/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  return handleResponse<void>(res);
 }
 
 export async function downloadSample(sampleId: number): Promise<Blob> {
@@ -411,6 +433,14 @@ export async function downloadCollections(collectionIds: number[]): Promise<Blob
   return res.blob();
 }
 
+export async function deleteCollection(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/collections/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  return handleResponse<void>(res);
+}
+
 // ==================== FOLDERS API ====================
 
 export async function fetchFolders(): Promise<Folder[]> {
@@ -443,6 +473,14 @@ export async function createFolder(dto: CreateFolderDto): Promise<Folder> {
   return handleResponse<Folder>(res);
 }
 
+export async function deleteFolder(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/folders/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  return handleResponse<void>(res);
+}
+
 // ==================== GROUPS API ====================
 
 export async function fetchGroups(): Promise<Group[]> {
@@ -466,6 +504,14 @@ export async function createGroup(dto: CreateGroupDto): Promise<Group> {
     body: JSON.stringify(dto),
   });
   return handleResponse<Group>(res);
+}
+
+export async function deleteGroup(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/groups/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  return handleResponse<void>(res);
 }
 
 export async function changeMemberRole(
