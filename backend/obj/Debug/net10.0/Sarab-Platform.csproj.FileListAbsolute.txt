@@ -491,3 +491,4 @@ C:\جامعة\مشروع فصلي\Development\Sarab-Platform\backend\obj\Debug\n
 C:\جامعة\مشروع فصلي\Development\Sarab-Platform\backend\obj\Debug\net10.0\Sarab-Platform.genruntimeconfig.cache
 C:\جامعة\مشروع فصلي\Development\Sarab-Platform\backend\obj\Debug\net10.0\ref\Sarab-Platform.dll
 C:\جامعة\مشروع فصلي\Development\Sarab-Platform\backend\bin\Debug\net10.0\Microsoft.AspNetCore.Authentication.JwtBearer.dll
+C:\Users\User\Desktop\Sarab-Platform\backend\bin\Debug\net10.0\Microsoft.AspNetCore.Authentication.JwtBearer.dll
