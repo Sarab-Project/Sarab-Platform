@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import {
   fetchSamples, fetchCollections, fetchFolders,
-  fetchTags, downloadSample, downloadSamples, downloadCollections, createCollection,
+  fetchTags, downloadSample, downloadSamples, createCollection,
   triggerDownload, searchSamples, createFolder,
   type Sample as ApiSample, type Collection, type Folder as ApiFolder,
   type Tag

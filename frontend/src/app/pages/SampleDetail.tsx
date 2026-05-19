@@ -5,7 +5,7 @@ import {
   File as FileIcon, AlertCircle, Loader, Tag as TagIcon
 } from 'lucide-react';
 import {
-  fetchSampleById, downloadSample, downloadSampleFiles,
+  fetchSampleById, downloadSample,
   fetchSampleFileBlob, triggerDownload, parseMetadata, fetchUserById,
   type Sample as ApiSample, type ResourceFile, type UserPublic
 } from '../services/api';

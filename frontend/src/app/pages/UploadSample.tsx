@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type DragEvent, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchCollections, uploadSample, fetchTags, type Collection, type FileMetadataInput, type Tag } from '../services/api';
@@ -81,7 +81,7 @@ export function UploadSample() {
     const incomingFiles = Array.from(files);
     setSelectedFiles(prev => [...prev, ...incomingFiles]);
     setFileMetadata(prev => [...prev, ...incomingFiles.map(() => ({ }))]);
-    setSelectedFileIndex(prev => prev === null ? 0 : prev);
+    setSelectedFileIndex(prev => (prev === null ? 0 : prev));
   };
 
   const removeFile = (index: number) => {
@@ -89,7 +89,7 @@ export function UploadSample() {
     setFileMetadata(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     handleFiles(e.dataTransfer.files);
   };
@@ -114,7 +114,7 @@ export function UploadSample() {
     });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
 

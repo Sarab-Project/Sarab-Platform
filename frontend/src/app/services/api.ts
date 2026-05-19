@@ -1,7 +1,6 @@
 import { getStoredToken } from '../contexts/AuthContext';
 
 export const API_BASE_URL = 'http://localhost:5027/api';
-export const STATIC_BASE_URL = 'http://localhost:5027';
 
 export interface ResourceFile {
   id: number;
@@ -143,14 +142,6 @@ export interface SearchSampleDto {
   pageSize?: number;
 }
 
-export interface DownloadSamplesDto {
-  sampleIds: number[];
-}
-
-export interface DownloadFilesDto {
-  fileIds: number[];
-}
-
 export interface FileMetadataInput {
   eyeSide?: string;
   gender?: string;
@@ -285,19 +276,6 @@ export async function deleteUser(id: number): Promise<void> {
   return handleResponse<void>(res);
 }
 
-export async function reviewUserDocument(
-  documentId: number,
-  status: number,
-  rejectionReason?: string
-): Promise<{ message: string }> {
-  const res = await fetch(`${API_BASE_URL}/users/documents/${documentId}/review`, {
-    method: 'PUT',
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ status, rejectionReason: rejectionReason || null }),
-  });
-  return handleResponse<{ message: string }>(res);
-}
-
 export async function fetchSamples(): Promise<Sample[]> {
   const res = await fetch(`${API_BASE_URL}/samples`, {
     headers: getAuthHeaders(),
@@ -379,16 +357,6 @@ export async function downloadSamples(sampleIds: number[]): Promise<Blob> {
   return res.blob();
 }
 
-export async function downloadSampleFiles(sampleId: number, fileIds: number[]): Promise<Blob> {
-  const res = await fetch(`${API_BASE_URL}/samples/${sampleId}/files/download`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ fileIds }),
-  });
-  if (!res.ok) throw new Error(`Download failed: ${res.status}`);
-  return res.blob();
-}
-
 // ==================== COLLECTIONS API ====================
 
 export async function fetchCollections(): Promise<Collection[]> {
@@ -398,13 +366,6 @@ export async function fetchCollections(): Promise<Collection[]> {
   return handleResponse<Collection[]>(res);
 }
 
-export async function fetchCollectionById(id: number): Promise<Collection> {
-  const res = await fetch(`${API_BASE_URL}/collections/${id}`, {
-    headers: getAuthHeaders(),
-  });
-  return handleResponse<Collection>(res);
-}
-
 export async function createCollection(dto: CreateCollectionDto): Promise<Collection> {
   const res = await fetch(`${API_BASE_URL}/collections`, {
     method: 'POST',
@@ -412,25 +373,6 @@ export async function createCollection(dto: CreateCollectionDto): Promise<Collec
     body: JSON.stringify(dto),
   });
   return handleResponse<Collection>(res);
-}
-
-export async function downloadCollection(id: number): Promise<Blob> {
-  const res = await fetch(`${API_BASE_URL}/collections/${id}/download`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-  });
-  if (!res.ok) throw new Error(`Download failed: ${res.status}`);
-  return res.blob();
-}
-
-export async function downloadCollections(collectionIds: number[]): Promise<Blob> {
-  const res = await fetch(`${API_BASE_URL}/collections/download`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ collectionIds }),
-  });
-  if (!res.ok) throw new Error(`Download failed: ${res.status}`);
-  return res.blob();
 }
 
 export async function deleteCollection(id: number): Promise<void> {
@@ -448,13 +390,6 @@ export async function fetchFolders(): Promise<Folder[]> {
     headers: getAuthHeaders(),
   });
   return handleResponse<Folder[]>(res);
-}
-
-export async function fetchFolderById(id: number): Promise<Folder> {
-  const res = await fetch(`${API_BASE_URL}/folders/${id}`, {
-    headers: getAuthHeaders(),
-  });
-  return handleResponse<Folder>(res);
 }
 
 export interface CreateFolderDto {
