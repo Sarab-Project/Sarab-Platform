@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  fetchGroups, fetchGroupById, createGroup, changeMemberRole, removeMember,
+  fetchGroups, fetchGroupById, createGroup, inviteGroupMembers, removeMember, deleteGroup, leaveGroup,
   type Group, type GroupMember
 } from '../services/api';
 import {
-  Users, Plus, ChevronRight, Loader, AlertCircle, X, Check,
+  Users, Plus, ChevronRight, Loader, AlertCircle, X,
   UserMinus, Crown, ArrowLeft
 } from 'lucide-react';
 
@@ -39,13 +39,17 @@ export function Groups() {
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState('');
 
-  // Role change
-  const [editingMemberId, setEditingMemberId] = useState<number | null>(null);
-  const [editingRole, setEditingRole] = useState<number>(2);
-  const [roleLoading, setRoleLoading] = useState(false);
-
   // Remove member
   const [removingMemberId, setRemovingMemberId] = useState<number | null>(null);
+
+  // Invite member
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteError, setInviteError] = useState('');
+
+  // Leave / Delete
+  const [leaving, setLeaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     loadGroups();
@@ -102,21 +106,7 @@ export function Groups() {
     }
   }
 
-  async function handleChangeRole(userId: number) {
-    if (!selectedGroup) return;
-    setRoleLoading(true);
-    try {
-      await changeMemberRole(selectedGroup.id, userId, editingRole);
-      // Refresh group detail
-      const updated = await fetchGroupById(selectedGroup.id);
-      setSelectedGroup(updated);
-      setEditingMemberId(null);
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to change role');
-    } finally {
-      setRoleLoading(false);
-    }
-  }
+  
 
   async function handleRemoveMember(userId: number) {
     if (!selectedGroup) return;
@@ -130,6 +120,60 @@ export function Groups() {
       alert(err instanceof Error ? err.message : 'Failed to remove member');
     } finally {
       setRemovingMemberId(null);
+    }
+  }
+
+  async function handleInviteMember(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedGroup) return;
+    if (!inviteEmail.trim()) {
+      setInviteError('Please enter a valid email address.');
+      return;
+    }
+
+    setInviteLoading(true);
+    setInviteError('');
+    try {
+      await inviteGroupMembers(selectedGroup.id, {
+        members: [{ email: inviteEmail.trim(), role: 2 }],
+      });
+      const updated = await fetchGroupById(selectedGroup.id);
+      setSelectedGroup(updated);
+      setInviteEmail('');
+    } catch (err) {
+      setInviteError(err instanceof Error ? err.message : 'Failed to invite user');
+    } finally {
+      setInviteLoading(false);
+    }
+  }
+
+  async function handleLeaveGroup() {
+    if (!selectedGroup) return;
+    if (!confirm('Are you sure you want to leave this group?')) return;
+    setLeaving(true);
+    try {
+      await leaveGroup(selectedGroup.id);
+      setSelectedGroup(null);
+      await loadGroups();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to leave group');
+    } finally {
+      setLeaving(false);
+    }
+  }
+
+  async function handleDeleteGroup() {
+    if (!selectedGroup) return;
+    if (!confirm('Delete this group? This action cannot be undone.')) return;
+    setDeleting(true);
+    try {
+      await deleteGroup(selectedGroup.id);
+      setSelectedGroup(null);
+      await loadGroups();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete group');
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -351,57 +395,23 @@ export function Groups() {
                           </div>
 
                           <div className="flex items-center gap-2">
-                            {editingMemberId === member.user.id ? (
-                              <>
-                                <select
-                                  value={editingRole}
-                                  onChange={e => setEditingRole(parseInt(e.target.value))}
-                                  className="text-xs px-2 py-1 border border-border rounded bg-input-background"
-                                >
-                                  {Object.entries(MEMBER_ROLES).map(([val, label]) => (
-                                    <option key={val} value={val}>{label}</option>
-                                  ))}
-                                </select>
-                                <button
-                                  onClick={() => handleChangeRole(member.user.id)}
-                                  disabled={roleLoading}
-                                  className="text-green-600 hover:text-green-700 disabled:opacity-50"
-                                >
-                                  <Check size={14} />
-                                </button>
-                                <button onClick={() => setEditingMemberId(null)} className="text-muted-foreground hover:text-foreground">
-                                  <X size={14} />
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <span
-                                  className="text-xs px-2.5 py-1 rounded-full font-medium"
-                                  style={ROLE_COLORS[member.role] || ROLE_COLORS[3]}
-                                >
-                                  {MEMBER_ROLES[member.role] || 'Unknown'}
-                                </span>
-                                {isGroupOwner(selectedGroup) && member.role !== 0 && (
-                                  <>
-                                    <button
-                                      onClick={() => { setEditingMemberId(member.user.id); setEditingRole(member.role); }}
-                                      className="text-xs px-2 py-1 border border-border rounded hover:bg-muted transition-colors"
-                                    >
-                                      Edit
-                                    </button>
-                                    <button
-                                      onClick={() => handleRemoveMember(member.user.id)}
-                                      disabled={removingMemberId === member.user.id}
-                                      className="text-red-500 hover:text-red-700 disabled:opacity-50 p-1"
-                                    >
-                                      {removingMemberId === member.user.id
-                                        ? <Loader size={13} className="animate-spin" />
-                                        : <UserMinus size={13} />
-                                      }
-                                    </button>
-                                  </>
-                                )}
-                              </>
+                            <span
+                              className="text-xs px-2.5 py-1 rounded-full font-medium"
+                              style={ROLE_COLORS[member.role] || ROLE_COLORS[3]}
+                            >
+                              {MEMBER_ROLES[member.role] || 'Unknown'}
+                            </span>
+                            {isGroupOwner(selectedGroup) && member.role !== 0 && (
+                              <button
+                                onClick={() => handleRemoveMember(member.user.id)}
+                                disabled={removingMemberId === member.user.id}
+                                className="text-red-500 hover:text-red-700 disabled:opacity-50 p-1"
+                              >
+                                {removingMemberId === member.user.id
+                                  ? <Loader size={13} className="animate-spin" />
+                                  : <UserMinus size={13} />
+                                }
+                              </button>
                             )}
                           </div>
                         </div>
@@ -409,6 +419,42 @@ export function Groups() {
                     </div>
                   )}
                 </div>
+
+                {isGroupOwner(selectedGroup) && (
+                  <div className="border border-border rounded-xl bg-card p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-semibold">Invite Member</h3>
+                      <span className="text-xs text-muted-foreground">Invite by email</span>
+                    </div>
+                    <form onSubmit={handleInviteMember} className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium mb-1.5">Email address</label>
+                        <input
+                          type="email"
+                          value={inviteEmail}
+                          onChange={e => setInviteEmail(e.target.value)}
+                          placeholder="user@example.com"
+                          className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40"
+                          required
+                        />
+                      </div>
+                      {inviteError && (
+                        <p className="text-sm text-red-600 flex items-center gap-1">
+                          <AlertCircle size={13} /> {inviteError}
+                        </p>
+                      )}
+                      <div className="flex justify-end">
+                        <button
+                          type="submit"
+                          disabled={inviteLoading}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white font-medium bg-[#9481ff] hover:bg-[#7c6ff6] disabled:opacity-60"
+                        >
+                          {inviteLoading ? 'Inviting...' : 'Invite Member'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
 
                 {/* Group Info */}
                 <div className="border border-border rounded-xl bg-card p-6">
@@ -430,6 +476,27 @@ export function Groups() {
                       <span className="text-muted-foreground">Members</span>
                       <span className="font-medium">{selectedGroup.members?.length || 0}</span>
                     </div>
+                  </div>
+                  <div className="mt-4 flex gap-3">
+                    {isGroupOwner(selectedGroup) ? (
+                      <button
+                        onClick={handleDeleteGroup}
+                        disabled={deleting}
+                        className="px-4 py-2 rounded-lg bg-red-600 text-white font-medium disabled:opacity-60"
+                      >
+                        {deleting ? 'Deleting...' : 'Delete Group'}
+                      </button>
+                    ) : (
+                      isAuthenticated && selectedGroup.members?.some(m => m.user.id === user?.id) && (
+                        <button
+                          onClick={handleLeaveGroup}
+                          disabled={leaving}
+                          className="px-4 py-2 rounded-lg bg-yellow-600 text-white font-medium disabled:opacity-60"
+                        >
+                          {leaving ? 'Leaving...' : 'Leave Group'}
+                        </button>
+                      )
+                    )}
                   </div>
                 </div>
               </div>

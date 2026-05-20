@@ -168,6 +168,16 @@ export interface CreateCollectionDto {
   ownerType: number;
   ownerId: number;
   templateId?: number;
+  allowedGroupIds?: number[];
+}
+
+export interface InviteMemberDto {
+  email: string;
+  role?: number;
+}
+
+export interface InviteMembersDto {
+  members: InviteMemberDto[];
 }
 
 export interface CreateGroupDto {
@@ -202,8 +212,18 @@ async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let errMsg = `HTTP ${res.status}`;
     try {
-      const body = await res.json();
-      errMsg = body.message || Object.values(body.errors || {}).flat().join(', ') || errMsg;
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const body = await res.json();
+        if (body && typeof body === 'object') {
+          errMsg = body?.message || body?.title || body?.detail || Object.values(body.errors || {}).flat().join(', ') || JSON.stringify(body) || errMsg;
+        } else if (typeof body === 'string') {
+          errMsg = body;
+        }
+      } else {
+        const textBody = await res.text();
+        errMsg = textBody || errMsg;
+      }
     } catch {
       // no-op
     }
@@ -449,6 +469,18 @@ export async function deleteGroup(id: number): Promise<void> {
   return handleResponse<void>(res);
 }
 
+export async function inviteGroupMembers(
+  groupId: number,
+  dto: InviteMembersDto
+): Promise<Group> {
+  const res = await fetch(`${API_BASE_URL}/groups/${groupId}/invite`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(dto),
+  });
+  return handleResponse<Group>(res);
+}
+
 export async function changeMemberRole(
   groupId: number,
   userId: number,
@@ -468,6 +500,16 @@ export async function removeMember(
 ): Promise<{ message: string }> {
   const res = await fetch(`${API_BASE_URL}/groups/${groupId}/members/${userId}`, {
     method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  return handleResponse<{ message: string }>(res);
+}
+
+export async function leaveGroup(
+  groupId: number
+): Promise<{ message: string }> {
+  const res = await fetch(`${API_BASE_URL}/groups/${groupId}/leave`, {
+    method: 'POST',
     headers: getAuthHeaders(),
   });
   return handleResponse<{ message: string }>(res);

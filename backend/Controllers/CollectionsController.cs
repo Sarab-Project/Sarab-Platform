@@ -40,6 +40,43 @@ namespace SarabPlatform.Controllers
             return _context.GroupMembers.Any(gm => gm.GroupId == groupId && gm.UserId == userId);
         }
 
+        private void SoftDeleteSamplesInFolder(int folderId)
+        {
+            var samples = _context.Samples
+                .Include(s => s.Files)
+                .Where(s => s.FolderId == folderId && !s.IsDeleted)
+                .ToList();
+
+            foreach (var sample in samples)
+            {
+                sample.IsDeleted = true;
+                sample.DeletedAt = DateTime.UtcNow;
+
+                foreach (var file in sample.Files ?? new List<ResourceFile>())
+                {
+                    file.IsDeleted = true;
+                    file.DeletedAt = DateTime.UtcNow;
+                }
+            }
+        }
+
+        private void SoftDeleteFolderAndDescendants(Folder folder)
+        {
+            folder.IsDeleted = true;
+            folder.DeletedAt = DateTime.UtcNow;
+
+            SoftDeleteSamplesInFolder(folder.Id);
+
+            var childFolders = _context.Folders
+                .Where(f => f.ParentId == folder.Id && !f.IsDeleted)
+                .ToList();
+
+            foreach (var child in childFolders)
+            {
+                SoftDeleteFolderAndDescendants(child);
+            }
+        }
+
         [HttpGet]
         [AllowAnonymous]
         public IActionResult GetCollections()
@@ -47,14 +84,16 @@ namespace SarabPlatform.Controllers
             var currentUserId = GetCurrentUserId();
             IQueryable<Collection> collectionsQuery = _context.Collections
                 .Where(c => !c.IsDeleted)
-                .Include(c => c.Folders!.Where(f => !f.IsDeleted));
+                .Include(c => c.Folders!.Where(f => !f.IsDeleted))
+                .Include(c => c.VisibleToGroups)!.ThenInclude(v => v.Group!);
 
             if (!IsAdminUser())
             {
                 collectionsQuery = collectionsQuery.Where(c =>
-                    (c.OwnerType == OwnerType.User && c.Name != "Private Collection") ||
-                    (c.OwnerType == OwnerType.User && c.OwnerId == currentUserId) ||
-                    (c.OwnerType == OwnerType.Group && _context.GroupMembers.Any(gm => gm.GroupId == c.OwnerId && gm.UserId == currentUserId))
+                        (c.OwnerType == OwnerType.User && c.Name != "Private Collection") ||
+                        (c.OwnerType == OwnerType.User && c.OwnerId == currentUserId) ||
+                        (c.OwnerType == OwnerType.Group && _context.GroupMembers.Any(gm => gm.GroupId == c.OwnerId && gm.UserId == currentUserId)) ||
+                        c.VisibleToGroups.Any(v => v.Group!.Members.Any(m => m.UserId == currentUserId))
                 );
             }
 
@@ -69,6 +108,7 @@ namespace SarabPlatform.Controllers
             var currentUserId = GetCurrentUserId();
             var collection = _context.Collections
                 .Include(c => c.Folders!.Where(f => !f.IsDeleted))
+                .Include(c => c.VisibleToGroups)!.ThenInclude(v => v.Group!)
                 .FirstOrDefault(c => c.Id == id && !c.IsDeleted);
             if (collection == null)
             {
@@ -80,6 +120,16 @@ namespace SarabPlatform.Controllers
                 return NotFound();
             }
 
+            // Allow access if collection was explicitly made visible to a group the user is a member of
+            if (!IsAdminUser() && collection.VisibleToGroups != null && collection.VisibleToGroups.Any())
+            {
+                var canSee = collection.VisibleToGroups.Any(v => v.Group != null && v.Group.Members.Any(m => m.UserId == currentUserId));
+                if (!canSee && !(collection.OwnerType == OwnerType.Group && UserIsGroupMember(currentUserId, collection.OwnerId)))
+                {
+                    return NotFound();
+                }
+            }
+
             if (!IsAdminUser() && collection.OwnerType == OwnerType.Group && !UserIsGroupMember(currentUserId, collection.OwnerId))
             {
                 return NotFound();
@@ -89,7 +139,7 @@ namespace SarabPlatform.Controllers
         }
 
         [HttpPost]
-        [Authorize(Policy = "ContributorOrAdmin")]
+        [Authorize(Policy = "AdminOnly")]
         public IActionResult CreateCollection([FromBody] CreateCollectionDto dto)
         {
             var currentUserId = GetCurrentUserId();
@@ -159,7 +209,38 @@ namespace SarabPlatform.Controllers
             {
                 _context.Collections.Add(collection);
                 _context.SaveChanges();
-                return CreatedAtAction(nameof(GetCollection), new { id = collection.Id }, collection);
+
+                // Handle allowed groups
+                if (dto.AllowedGroupIds != null && dto.AllowedGroupIds.Count > 0)
+                {
+                    foreach (var gid in dto.AllowedGroupIds.Distinct())
+                    {
+                        var g = _context.Groups.FirstOrDefault(x => x.Id == gid && !x.IsDeleted);
+                        if (g == null)
+                        {
+                            return BadRequest($"Group with id {gid} not found.");
+                        }
+
+                        if (!IsAdminUser() && !UserIsGroupMember(currentUserId, gid))
+                        {
+                            return Forbid("You can only assign visibility to groups you are a member of.");
+                        }
+
+                        _context.CollectionGroups.Add(new CollectionGroup
+                        {
+                            CollectionId = collection.Id,
+                            GroupId = gid
+                        });
+                    }
+                    _context.SaveChanges();
+                }
+
+                var result = _context.Collections
+                    .Include(c => c.Folders!.Where(f => !f.IsDeleted))
+                    .Include(c => c.VisibleToGroups)!.ThenInclude(v => v.Group!)
+                    .FirstOrDefault(c => c.Id == collection.Id && !c.IsDeleted);
+
+                return CreatedAtAction(nameof(GetCollection), new { id = collection.Id }, result);
             }
             catch (Exception ex)
             {
@@ -176,6 +257,13 @@ namespace SarabPlatform.Controllers
             {
                 return NotFound();
             }
+
+            var folders = _context.Folders.Where(f => f.CollectionId == id && !f.IsDeleted).ToList();
+            foreach (var folder in folders)
+            {
+                SoftDeleteFolderAndDescendants(folder);
+            }
+
             collection.IsDeleted = true;
             collection.DeletedAt = DateTime.UtcNow;
             _context.SaveChanges();

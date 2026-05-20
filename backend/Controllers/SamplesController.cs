@@ -58,6 +58,12 @@ namespace SarabPlatform.Controllers
             return _context.GroupMembers.Any(gm => gm.GroupId == groupId && gm.UserId == userId);
         }
 
+        private bool UserIsGroupContributor(int userId, int groupId)
+        {
+            return _context.GroupMembers.Any(gm => gm.GroupId == groupId && gm.UserId == userId &&
+                (gm.Role == GroupRole.Owner || gm.Role == GroupRole.Contributor));
+        }
+
         [HttpGet]
         [AllowAnonymous]
         public async Task<IActionResult> GetSamples()
@@ -424,6 +430,18 @@ namespace SarabPlatform.Controllers
             }
 
             var currentUserId = GetCurrentUserId();
+
+            var collection = await _context.Collections.FirstOrDefaultAsync(c => c.Id == folder.CollectionId && !c.IsDeleted);
+            if (collection == null)
+            {
+                return BadRequest("Collection not found.");
+            }
+
+            if (!IsAdminUser() && collection.OwnerType == OwnerType.Group && !UserIsGroupContributor(currentUserId, collection.OwnerId))
+            {
+                return Forbid("Only group contributors can upload samples to this group collection.");
+            }
+
             var sample = new Sample
             {
                 Title = dto.Title,

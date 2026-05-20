@@ -16,5 +16,6 @@ namespace SarabPlatform.Models
         public DateTime DeletedAt { get; set; }
         public List<GroupMember> Members { get; set; }
         public List<Collection>? Collections { get; set; }
+        public List<CollectionGroup>? VisibleCollections { get; set; }
     }
 }

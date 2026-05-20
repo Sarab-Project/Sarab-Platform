@@ -40,6 +40,49 @@ namespace SarabPlatform.Controllers
             return _context.GroupMembers.Any(gm => gm.GroupId == groupId && gm.UserId == userId);
         }
 
+        private bool UserIsGroupContributor(int userId, int groupId)
+        {
+            return _context.GroupMembers.Any(gm => gm.GroupId == groupId && gm.UserId == userId &&
+                (gm.Role == GroupRole.Owner || gm.Role == GroupRole.Contributor));
+        }
+
+        private void SoftDeleteSamplesInFolder(int folderId)
+        {
+            var samples = _context.Samples
+                .Include(s => s.Files)
+                .Where(s => s.FolderId == folderId && !s.IsDeleted)
+                .ToList();
+
+            foreach (var sample in samples)
+            {
+                sample.IsDeleted = true;
+                sample.DeletedAt = DateTime.UtcNow;
+
+                foreach (var file in sample.Files ?? new List<ResourceFile>())
+                {
+                    file.IsDeleted = true;
+                    file.DeletedAt = DateTime.UtcNow;
+                }
+            }
+        }
+
+        private void SoftDeleteFolderAndDescendants(Folder folder)
+        {
+            folder.IsDeleted = true;
+            folder.DeletedAt = DateTime.UtcNow;
+
+            SoftDeleteSamplesInFolder(folder.Id);
+
+            var childFolders = _context.Folders
+                .Where(f => f.ParentId == folder.Id && !f.IsDeleted)
+                .ToList();
+
+            foreach (var child in childFolders)
+            {
+                SoftDeleteFolderAndDescendants(child);
+            }
+        }
+
         [HttpGet]
         [AllowAnonymous]
         public IActionResult GetFolders()
@@ -121,9 +164,9 @@ namespace SarabPlatform.Controllers
                     return Forbid("You cannot add folders to another user's collection.");
                 }
 
-                if (collection.OwnerType == OwnerType.Group && !UserIsGroupMember(currentUserId, collection.OwnerId))
+                if (collection.OwnerType == OwnerType.Group && !UserIsGroupContributor(currentUserId, collection.OwnerId))
                 {
-                    return Forbid("Only group members can add folders to this group collection.");
+                    return Forbid("Only group contributors can add folders to this group collection.");
                 }
             }
 
@@ -173,8 +216,7 @@ namespace SarabPlatform.Controllers
                 return NotFound();
             }
 
-            folder.IsDeleted = true;
-            folder.DeletedAt = DateTime.UtcNow;
+            SoftDeleteFolderAndDescendants(folder);
             await _context.SaveChangesAsync();
             return NoContent();
         }

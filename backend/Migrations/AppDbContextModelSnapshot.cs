@@ -91,6 +91,21 @@ namespace Sarab_Platform.Migrations
                     b.ToTable("Collections");
                 });
 
+            modelBuilder.Entity("SarabPlatform.Models.CollectionGroup", b =>
+                {
+                    b.Property<int>("CollectionId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("GroupId")
+                        .HasColumnType("int");
+
+                    b.HasKey("CollectionId", "GroupId");
+
+                    b.HasIndex("GroupId");
+
+                    b.ToTable("CollectionGroups");
+                });
+
             modelBuilder.Entity("SarabPlatform.Models.CollectionTemplate", b =>
                 {
                     b.Property<int>("Id")
@@ -531,6 +546,25 @@ namespace Sarab_Platform.Migrations
                     b.Navigation("Group");
                 });
 
+            modelBuilder.Entity("SarabPlatform.Models.CollectionGroup", b =>
+                {
+                    b.HasOne("SarabPlatform.Models.Collection", "Collection")
+                        .WithMany("VisibleToGroups")
+                        .HasForeignKey("CollectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SarabPlatform.Models.Group", "Group")
+                        .WithMany("VisibleCollections")
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Collection");
+
+                    b.Navigation("Group");
+                });
+
             modelBuilder.Entity("SarabPlatform.Models.Folder", b =>
                 {
                     b.HasOne("SarabPlatform.Models.Collection", "Collection")
@@ -629,6 +663,8 @@ namespace Sarab_Platform.Migrations
             modelBuilder.Entity("SarabPlatform.Models.Collection", b =>
                 {
                     b.Navigation("Folders");
+
+                    b.Navigation("VisibleToGroups");
                 });
 
             modelBuilder.Entity("SarabPlatform.Models.Folder", b =>
@@ -643,6 +679,8 @@ namespace Sarab_Platform.Migrations
                     b.Navigation("Collections");
 
                     b.Navigation("Members");
+
+                    b.Navigation("VisibleCollections");
                 });
 
             modelBuilder.Entity("SarabPlatform.Models.Sample", b =>

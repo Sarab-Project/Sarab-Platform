@@ -3,7 +3,6 @@ C:\جامعة\مشروع فصلي\Development\Sarab-Platform\backend\bin\Debug\n
 C:\جامعة\مشروع فصلي\Development\Sarab-Platform\backend\bin\Debug\net10.0\dotnet-tools.json
 C:\جامعة\مشروع فصلي\Development\Sarab-Platform\backend\bin\Debug\net10.0\tags.json
 C:\جامعة\مشروع فصلي\Development\Sarab-Platform\backend\bin\Debug\net10.0\Sarab-Platform.staticwebassets.endpoints.json
-C:\جامعة\مشروع فصلي\Development\Sarab-Platform\backend\bin\Debug\net10.0\Sarab-Platform.exe
 C:\جامعة\مشروع فصلي\Development\Sarab-Platform\backend\bin\Debug\net10.0\Sarab-Platform.deps.json
 C:\جامعة\مشروع فصلي\Development\Sarab-Platform\backend\bin\Debug\net10.0\Sarab-Platform.runtimeconfig.json
 C:\جامعة\مشروع فصلي\Development\Sarab-Platform\backend\bin\Debug\net10.0\Sarab-Platform.dll
@@ -164,3 +163,4 @@ C:\جامعة\مشروع فصلي\Development\Sarab-Platform\backend\obj\Debug\n
 C:\جامعة\مشروع فصلي\Development\Sarab-Platform\backend\obj\Debug\net10.0\Sarab-Platform.pdb
 C:\جامعة\مشروع فصلي\Development\Sarab-Platform\backend\obj\Debug\net10.0\Sarab-Platform.genruntimeconfig.cache
 C:\جامعة\مشروع فصلي\Development\Sarab-Platform\backend\obj\Debug\net10.0\ref\Sarab-Platform.dll
+C:\جامعة\مشروع فصلي\Development\Sarab-Platform\backend\bin\Debug\net10.0\Sarab-Platform.exe

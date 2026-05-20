@@ -7,10 +7,10 @@ import {
 } from 'lucide-react';
 import {
   fetchSamples, fetchCollections, fetchFolders,
-  fetchTags, downloadSample, downloadSamples, createCollection,
+  fetchTags, downloadSample, downloadSamples, createCollection, fetchGroups,
   triggerDownload, searchSamples, createFolder,
   type Sample as ApiSample, type Collection, type Folder as ApiFolder,
-  type Tag
+  type Tag, type SearchSampleDto, type Group
 } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -32,6 +32,15 @@ export function DatabaseView() {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   const canManageContent = user?.role === 'Admin' || user?.role === 'Contributor';
+  const canCreateCollection = user?.role === 'Admin';
+  const canCreateFolder = canManageContent;
+  const canViewWorkspace = canManageContent;
+
+  useEffect(() => {
+    if (!canViewWorkspace && activeTab === 'my-collection') {
+      setActiveTab('flat');
+    }
+  }, [canViewWorkspace, activeTab]);
 
   // API State
   const [samples, setSamples] = useState<ApiSample[]>([]);
@@ -58,6 +67,8 @@ export function DatabaseView() {
   const [newCollDesc, setNewCollDesc] = useState('');
   const [createCollLoading, setCreateCollLoading] = useState(false);
   const [createCollError, setCreateCollError] = useState('');
+  const [creatorGroups, setCreatorGroups] = useState<Group[]>([]);
+  const [newCollAllowedGroupIds, setNewCollAllowedGroupIds] = useState<number[]>([]);
 
   // Folder creation
   const [showCreateFolder, setShowCreateFolder] = useState(false);
@@ -308,18 +319,36 @@ export function DatabaseView() {
         description: newCollDesc || undefined,
         createdBy: user.id,
         ownerType: 0,
-        ownerId: user.id,
+          ownerId: user.id,
+          allowedGroupIds: newCollAllowedGroupIds,
       });
       setCollections(prev => [...prev, coll]);
       setShowCreateCollection(false);
       setNewCollName('');
       setNewCollDesc('');
+        setNewCollAllowedGroupIds([]);
     } catch (err) {
       setCreateCollError(err instanceof Error ? err.message : 'Failed to create collection');
     } finally {
       setCreateCollLoading(false);
     }
   };
+
+    useEffect(() => {
+      if (!showCreateCollection) return;
+      let mounted = true;
+      (async () => {
+        try {
+          const groups = await fetchGroups();
+          if (!mounted) return;
+          const filtered = groups.filter(g => g.members?.some(m => m.user.id === user?.id));
+          setCreatorGroups(filtered);
+        } catch (err) {
+          setCreatorGroups([]);
+        }
+      })();
+      return () => { mounted = false; };
+    }, [showCreateCollection, user]);
 
   const handleCreateFolder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -546,7 +575,7 @@ export function DatabaseView() {
               icon={<Layers size={16} />}
               label="Collections"
             />
-            {isAuthenticated && (
+            {canViewWorkspace && (
               <TabButton
                 active={activeTab === 'my-collection'}
                 onClick={() => { setActiveTab('my-collection'); setCurrentFolderId(null); }}
@@ -672,7 +701,7 @@ export function DatabaseView() {
                 <span className="text-sm text-muted-foreground font-medium">
                   {collections.length} collection{collections.length !== 1 ? 's' : ''}
                 </span>
-                {canManageContent && (
+                {canCreateCollection && (
                   <button
                     onClick={() => setShowCreateCollection(true)}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium bg-primary shadow-sm hover:bg-primary/90 transition-colors"
@@ -746,6 +775,28 @@ export function DatabaseView() {
                           className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-primary/40 min-h-20"
                         />
                       </div>
+                      {creatorGroups.length > 0 && (
+                        <div>
+                          <label className="block text-sm font-medium mb-2">Visible to groups (optional)</label>
+                          <div className="space-y-2 max-h-40 overflow-y-auto border border-border rounded-md p-2 bg-input-background">
+                            {creatorGroups.map(g => (
+                              <label key={g.id} className="flex items-center gap-2 text-sm">
+                                <input
+                                  type="checkbox"
+                                  checked={newCollAllowedGroupIds.includes(g.id)}
+                                  onChange={e => {
+                                    setNewCollAllowedGroupIds(prev => {
+                                      if (e.target.checked) return [...prev, g.id];
+                                      return prev.filter(id => id !== g.id);
+                                    });
+                                  }}
+                                />
+                                <span>{g.name}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       {createCollError && (
                         <p className="text-sm text-red-600 flex items-center gap-1">
                           <AlertCircle size={13} /> {createCollError}
@@ -782,8 +833,8 @@ export function DatabaseView() {
                   <h3 className="font-semibold mb-1">{currentCollection?.name}</h3>
                   <p className="text-muted-foreground text-sm">Browse folders and samples in this collection.</p>
                 </div>
-                {canManageContent && (
-                  <div className="flex gap-2">
+                <div className="flex gap-2">
+                  {canCreateFolder && (
                     <button
                       onClick={() => setShowCreateFolder(true)}
                       className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium bg-primary shadow-sm hover:bg-primary/90 transition-colors"
@@ -791,17 +842,17 @@ export function DatabaseView() {
                       <Plus size={14} />
                       New Folder
                     </button>
-                    {currentCollectionFolderId && (
-                      <button
-                        onClick={() => navigate(`/upload?collectionId=${currentCollectionId}&folderId=${currentCollectionFolderId}`)}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium bg-primary shadow-sm hover:bg-primary/90 transition-colors"
-                      >
-                        <UploadCloud size={14} />
-                        Upload Sample
-                      </button>
-                    )}
-                  </div>
-                )}
+                  )}
+                  {currentCollectionFolderId && canManageContent && (
+                    <button
+                      onClick={() => navigate(`/upload?collectionId=${currentCollectionId}&folderId=${currentCollectionFolderId}`)}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium bg-primary shadow-sm hover:bg-primary/90 transition-colors"
+                    >
+                      <UploadCloud size={14} />
+                      Upload Sample
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Collection Breadcrumbs */}
@@ -850,7 +901,7 @@ export function DatabaseView() {
                   <p className="text-muted-foreground max-w-sm mx-auto mb-6 text-sm">
                     Create a folder first, then upload samples inside that folder.
                   </p>
-                  {canManageContent && (
+                  {canCreateFolder && (
                     <div className="flex gap-2 justify-center">
                       <button
                         onClick={() => setShowCreateFolder(true)}
@@ -956,15 +1007,15 @@ export function DatabaseView() {
 
 
           {/* ─── MY WORKSPACE ─── */}
-          {!loading && activeTab === 'my-collection' && (
+          {!loading && canViewWorkspace && activeTab === 'my-collection' && (
             <div className="animate-in fade-in duration-200">
               <div className="flex items-center justify-between mb-5">
                 <div>
                   <h3 className="font-semibold mb-1">My Workspace</h3>
                   <p className="text-muted-foreground text-sm">Manage your personal samples and folders.</p>
                 </div>
-                {canManageContent && (
-                  <div className="flex gap-2">
+                <div className="flex gap-2">
+                  {canCreateFolder && (
                     <button
                       onClick={() => setShowCreateFolder(true)}
                       className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium bg-primary shadow-sm hover:bg-primary/90 transition-colors"
@@ -972,6 +1023,8 @@ export function DatabaseView() {
                       <Plus size={14} />
                       New Folder
                     </button>
+                  )}
+                  {canManageContent && (
                     <button
                       onClick={() => navigate(`/upload?folderId=${currentFolderId || ''}`)}
                       className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium bg-primary shadow-sm hover:bg-primary/90 transition-colors"
@@ -979,11 +1032,10 @@ export function DatabaseView() {
                       <UploadCloud size={14} />
                       Upload Sample
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
 
-              {/* Breadcrumbs */}
               <div className="flex items-center gap-2 text-sm text-muted-foreground mb-5 bg-card border border-border px-4 py-2.5 rounded-xl overflow-x-auto">
                 <button
                   onClick={() => setCurrentFolderId(null)}
