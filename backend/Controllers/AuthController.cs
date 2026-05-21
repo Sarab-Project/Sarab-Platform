@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -23,12 +24,70 @@ namespace SarabPlatform.Controllers
             _tokenService = tokenService;
         }
 
+        private static readonly Regex EmailRegex = new("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+        private bool IsValidEmail(string? email)
+        {
+            return !string.IsNullOrWhiteSpace(email) && EmailRegex.IsMatch(email.Trim());
+        }
+
+        private List<string> GetPasswordValidationErrors(string? password, string? firstName, string? lastName, string? email)
+        {
+            var errors = new List<string>();
+            if (string.IsNullOrWhiteSpace(password))
+            {
+                errors.Add("Password is required.");
+                return errors;
+            }
+
+            if (password.Length < 8)
+                errors.Add("Password must be at least 8 characters.");
+            if (!Regex.IsMatch(password, "[A-Z]"))
+                errors.Add("Add at least one uppercase letter.");
+            if (!Regex.IsMatch(password, "[a-z]"))
+                errors.Add("Add at least one lowercase letter.");
+            if (!Regex.IsMatch(password, "\\d"))
+                errors.Add("Add at least one number.");
+            if (!Regex.IsMatch(password, "[^A-Za-z0-9]"))
+                errors.Add("Add at least one special character.");
+            if (Regex.IsMatch(password, "(.)\\1\\1"))
+                errors.Add("Avoid repeated characters like aaa or 111.");
+            if (Regex.IsMatch(password, "(?:012|123|234|345|456|567|678|789|abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz)", RegexOptions.IgnoreCase))
+                errors.Add("Avoid simple patterns like 123 or abc.");
+
+            var lowerPassword = password.ToLowerInvariant();
+            var normalizedEmailLocal = email?.Split('@').FirstOrDefault()?.ToLowerInvariant() ?? string.Empty;
+            var nameParts = new[] { firstName, lastName, normalizedEmailLocal }
+                .Where(part => !string.IsNullOrWhiteSpace(part))
+                .Select(part => Regex.Replace(part!.ToLowerInvariant(), "[^a-z0-9]", string.Empty))
+                .Where(part => part.Length >= 3)
+                .Distinct();
+
+            foreach (var part in nameParts)
+            {
+                if (lowerPassword.Contains(part))
+                {
+                    errors.Add("Avoid using your name or email in the password.");
+                    break;
+                }
+            }
+
+            return errors;
+        }
+
         [HttpPost("signup")]
         [AllowAnonymous]
         public async Task<IActionResult> Signup(CreateUserDto dto)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
+
+            if (!IsValidEmail(dto.Email))
+                return BadRequest(new { message = "Please enter a valid email address." });
+
+            var passwordErrors = GetPasswordValidationErrors(dto.Password, dto.FirstName, dto.LastName, dto.Email);
+            if (passwordErrors.Count > 0)
+                return BadRequest(new { message = string.Join(" ", passwordErrors) });
 
             var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
             if (existingUser != null)

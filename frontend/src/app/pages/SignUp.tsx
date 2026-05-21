@@ -15,25 +15,87 @@ export function SignUp() {
   const { signup } = useAuth();
   const navigate = useNavigate();
 
+  const EMAIL_REGEX = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+
+  const normalizeValue = (value: string) => value.trim().toLowerCase();
+
+  const containsNameOrEmail = () => {
+    const passwordValue = normalizeValue(password);
+    const terms = [firstName, lastName, email.split('@')[0]]
+      .map(normalizeValue)
+      .map(value => value.replace(/[^a-z0-9]/g, ''))
+      .filter(value => value.length >= 3);
+
+    return terms.some(term => passwordValue.includes(term));
+  };
+
+  const hasSimpleSequence = () => /(?:012|123|234|345|456|567|678|789|abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz)/i.test(password);
+  const hasRepeatedChars = () => /(.)\1\1/.test(password);
+
+  const passwordChecks = {
+    length: password.length >= 8,
+    lengthStrong: password.length >= 12,
+    upper: /[A-Z]/.test(password),
+    lower: /[a-z]/.test(password),
+    digit: /\d/.test(password),
+    special: /[^A-Za-z0-9]/.test(password),
+    noNameOrEmail: !containsNameOrEmail(),
+    noSimpleSequence: !hasSimpleSequence(),
+    noRepeatedChars: !hasRepeatedChars(),
+  };
+
   const passwordStrength = () => {
-    if (password.length === 0) return null;
+    if (!password) return null;
     if (password.length < 8) return { label: 'Too short', color: '#ef4444' };
-    if (password.length < 12) return { label: 'Acceptable', color: '#f59e0b' };
+
+    let score = 0;
+    score += passwordChecks.lengthStrong ? 2 : 1;
+    score += passwordChecks.upper ? 1 : 0;
+    score += passwordChecks.lower ? 1 : 0;
+    score += passwordChecks.digit ? 1 : 0;
+    score += passwordChecks.special ? 1 : 0;
+    score += passwordChecks.noNameOrEmail ? 1 : 0;
+    score += passwordChecks.noSimpleSequence ? 1 : 0;
+    score += passwordChecks.noRepeatedChars ? 1 : 0;
+
+    if (score <= 4) return { label: 'Weak', color: '#ef4444' };
+    if (score <= 6) return { label: 'Moderate', color: '#f59e0b' };
     return { label: 'Strong', color: '#22c55e' };
   };
 
   const strength = passwordStrength();
 
+  const getPasswordValidationErrors = (): string[] => {
+    const errors: string[] = [];
+    if (password.length < 8) errors.push('Password must be at least 8 characters.');
+    if (!passwordChecks.upper) errors.push('Add at least one uppercase letter.');
+    if (!passwordChecks.lower) errors.push('Add at least one lowercase letter.');
+    if (!passwordChecks.digit) errors.push('Add at least one number.');
+    if (!passwordChecks.special) errors.push('Add at least one special character.');
+    if (!passwordChecks.noNameOrEmail) errors.push('Avoid using your name or email in the password.');
+    if (!passwordChecks.noSimpleSequence) errors.push('Avoid simple sequences like 123 or abc.');
+    if (!passwordChecks.noRepeatedChars) errors.push('Avoid repeated characters like aaa or 111.');
+    return errors;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters.');
+    const trimmedEmail = email.trim();
+    if (!EMAIL_REGEX.test(trimmedEmail)) {
+      setError('Please enter a valid email address.');
       return;
     }
-    if (firstName.length < 3) {
+
+    if (firstName.trim().length < 3) {
       setError('First name must be at least 3 characters.');
+      return;
+    }
+
+    const passwordErrors = getPasswordValidationErrors();
+    if (passwordErrors.length > 0) {
+      setError(passwordErrors[0]);
       return;
     }
 
@@ -188,15 +250,43 @@ export function SignUp() {
 
             <div className="pt-1 space-y-1.5 text-xs text-muted-foreground">
               <div className="flex items-center gap-1.5">
-                <CheckCircle size={12} className={firstName.length >= 3 ? 'text-green-500' : 'text-muted-foreground/50'} />
+                <CheckCircle size={12} className={firstName.trim().length >= 3 ? 'text-green-500' : 'text-muted-foreground/50'} />
                 First name at least 3 characters
               </div>
               <div className="flex items-center gap-1.5">
-                <CheckCircle size={12} className={password.length >= 8 ? 'text-green-500' : 'text-muted-foreground/50'} />
+                <CheckCircle size={12} className={passwordChecks.length ? 'text-green-500' : 'text-muted-foreground/50'} />
                 Password at least 8 characters
               </div>
               <div className="flex items-center gap-1.5">
-                <CheckCircle size={12} className={email.includes('@') ? 'text-green-500' : 'text-muted-foreground/50'} />
+                <CheckCircle size={12} className={passwordChecks.upper ? 'text-green-500' : 'text-muted-foreground/50'} />
+                Contains uppercase letter
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CheckCircle size={12} className={passwordChecks.lower ? 'text-green-500' : 'text-muted-foreground/50'} />
+                Contains lowercase letter
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CheckCircle size={12} className={passwordChecks.digit ? 'text-green-500' : 'text-muted-foreground/50'} />
+                Contains number
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CheckCircle size={12} className={passwordChecks.special ? 'text-green-500' : 'text-muted-foreground/50'} />
+                Contains special character
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CheckCircle size={12} className={passwordChecks.noNameOrEmail ? 'text-green-500' : 'text-muted-foreground/50'} />
+                Does not contain your name or email
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CheckCircle size={12} className={passwordChecks.noSimpleSequence ? 'text-green-500' : 'text-muted-foreground/50'} />
+                Avoids simple patterns like 123 or abc
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CheckCircle size={12} className={passwordChecks.noRepeatedChars ? 'text-green-500' : 'text-muted-foreground/50'} />
+                Avoids repeated characters like aaa or 111
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CheckCircle size={12} className={EMAIL_REGEX.test(email.trim()) ? 'text-green-500' : 'text-muted-foreground/50'} />
                 Valid email address
               </div>
             </div>

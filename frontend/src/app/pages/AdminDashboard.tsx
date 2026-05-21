@@ -88,6 +88,11 @@ export function AdminDashboard() {
     }
   }
 
+  const getUserFullName = (userId: number) => {
+    const found = users.find(u => u.id === userId);
+    return found ? `${found.firstName} ${found.lastName}` : null;
+  };
+
   const handleRoleUpdate = async (userId: number) => {
     setEditLoading(true);
     try {
@@ -500,7 +505,7 @@ export function AdminDashboard() {
                       <div>
                         <h3 className="font-semibold">{c.name}</h3>
                         <p className="text-sm text-muted-foreground mt-0.5">
-                          Owner: {c.ownerType === 0 ? `User #${c.ownerId}` : `Group #${c.ownerId}`}
+                          Owner: {c.ownerType === 0 ? (getUserFullName(c.ownerId) ?? 'Personal') : `Group #${c.ownerId}`}
                           {' '} • Created {new Date(c.createdAt).toLocaleDateString()}
                         </p>
                       </div>
@@ -612,7 +617,7 @@ export function AdminDashboard() {
                     )}
                     <div className="flex items-center justify-between gap-4">
                       <div className="text-xs text-muted-foreground">
-                        Created {new Date(g.createdAt).toLocaleDateString()} • By user #{g.createdBy}
+                        Created {new Date(g.createdAt).toLocaleDateString()} • By {getUserFullName(g.createdBy) ?? 'Unknown user'}
                       </div>
                       <button
                         onClick={() => handleDeleteGroup(g.id)}

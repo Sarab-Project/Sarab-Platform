@@ -31,6 +31,7 @@ export interface Sample {
   folder?: any;
   description: string | null;
   createdBy: number;
+  createdByUser?: UserPublic | null;
   downloadCount?: number;
   viewCount?: number;
   metadata?: string;

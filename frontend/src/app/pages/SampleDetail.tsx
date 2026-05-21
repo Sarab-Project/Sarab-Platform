@@ -71,13 +71,16 @@ export function SampleDetail() {
         const data = await fetchSampleById(parseInt(id!));
         setSample(data);
 
-        // Fetch user information
-        try {
-          const userData = await fetchUserById(data.createdBy);
-          setUser(userData);
-        } catch (userErr) {
-          console.warn('Failed to load user information:', userErr);
-          setUser(null);
+        if (data.createdByUser) {
+          setUser(data.createdByUser);
+        } else {
+          try {
+            const userData = await fetchUserById(data.createdBy);
+            setUser(userData);
+          } catch (userErr) {
+            console.warn('Failed to load user information:', userErr);
+            setUser(null);
+          }
         }
 
         const mapped: FileItem[] = (data.files || []).map((f: ResourceFile) => ({
@@ -291,7 +294,7 @@ export function SampleDetail() {
           </div>
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
             <span>
-              By {user ? `${user.firstName} ${user.lastName}` : `User #${sample.createdBy}`}
+              By {user ? `${user.firstName} ${user.lastName}` : 'Unknown user'}
             </span>
             <span>•</span>
             <span>{new Date(sample.createdAt).toLocaleDateString()}</span>

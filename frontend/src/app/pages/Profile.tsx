@@ -236,10 +236,6 @@ export function Profile() {
               <h3 className="font-semibold mb-4">Account Info</h3>
               <div className="space-y-3">
                 <div className="flex justify-between items-start text-sm gap-2">
-                  <span className="text-muted-foreground">User ID</span>
-                  <span className="font-medium text-right">#{user.id}</span>
-                </div>
-                <div className="flex justify-between items-start text-sm gap-2">
                   <span className="text-muted-foreground">Email</span>
                   <span className="font-medium text-right break-all">{user.email}</span>
                 </div>

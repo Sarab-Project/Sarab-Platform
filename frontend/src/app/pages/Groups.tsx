@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   fetchGroups, fetchGroupById, createGroup, inviteGroupMembers, removeMember, deleteGroup, leaveGroup,
-  type Group, type GroupMember
+  fetchUserById, type Group, type GroupMember
 } from '../services/api';
 import {
   Users, Plus, ChevronRight, Loader, AlertCircle, X,
@@ -28,6 +28,7 @@ export function Groups() {
   const canCreateGroup = user?.role === 'Admin' || user?.role === 'Contributor' || user?.role === 'Researcher';
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+  const [creatorName, setCreatorName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState('');
@@ -70,9 +71,21 @@ export function Groups() {
 
   async function openGroupDetail(groupId: number) {
     setDetailLoading(true);
+    setCreatorName(null);
     try {
       const detail = await fetchGroupById(groupId);
       setSelectedGroup(detail);
+      const memberCreator = detail.members?.find(m => m.user.id === detail.createdBy)?.user;
+      if (memberCreator) {
+        setCreatorName(`${memberCreator.firstName} ${memberCreator.lastName}`);
+      } else {
+        try {
+          const createdByUser = await fetchUserById(detail.createdBy);
+          setCreatorName(`${createdByUser.firstName} ${createdByUser.lastName}`);
+        } catch {
+          setCreatorName(null);
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load group details');
     } finally {
@@ -466,7 +479,7 @@ export function Groups() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Created By</span>
-                      <span className="font-medium">User #{selectedGroup.createdBy}</span>
+                      <span className="font-medium">{creatorName ?? 'Unknown user'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Created At</span>
