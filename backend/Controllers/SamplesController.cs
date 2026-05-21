@@ -18,7 +18,6 @@ namespace SarabPlatform.Controllers
     {
         private readonly AppDbContext _context;
         private readonly FileService _fileService;
-        
         private readonly IHttpClientFactory _httpClientFactory;
 
         public SamplesController(AppDbContext context, FileService fileService, IHttpClientFactory httpClientFactory)
@@ -26,7 +25,6 @@ namespace SarabPlatform.Controllers
             _context = context;
             _fileService = fileService;
             _httpClientFactory = httpClientFactory;
-
         }
 
         private IQueryable<Sample> GetActiveSamplesQuery()
@@ -137,7 +135,7 @@ namespace SarabPlatform.Controllers
                 var client = _httpClientFactory.CreateClient();
                 client.Timeout = TimeSpan.FromMinutes(15);
 
-                string visionApiUrl = "http://25.9.129.103:8000/api/Samples/maps";
+                string visionApiUrl = "http://25.9.129.103:10000/api/Samples/maps";
                 var response = await client.PostAsync(visionApiUrl, multipartContent);
 
                 if (response.IsSuccessStatusCode)
@@ -153,21 +151,18 @@ namespace SarabPlatform.Controllers
                         await SaveBase64File(result.maps.right2left, "heatmap_rl.png", uploadPath, sample.Id);
                     }
 
-                    // --- معالجة وتحويل فيديوهات التتبع ---
                     if (result?.trackingVideos != null)
                     {
-                        // تحويل الفيديو الأول
                         if (!string.IsNullOrEmpty(result.trackingVideos.left2right))
                         {
                             var converted = await ProcessAndConvertVideo(result.trackingVideos.left2right, "tracked_lr", uploadPath, sample.Id);
-                            result.trackingVideos.left2right = converted; // تحديث الـ Base64 ليرسل للموبايل بصيغة mp4
+                            result.trackingVideos.left2right = converted;
                         }
 
-                        // تحويل الفيديو الثاني
                         if (!string.IsNullOrEmpty(result.trackingVideos.right2left))
                         {
                             var converted = await ProcessAndConvertVideo(result.trackingVideos.right2left, "tracked_rl", uploadPath, sample.Id);
-                            result.trackingVideos.right2left = converted; // تحديث الـ Base64 ليرسل للموبايل بصيغة mp4
+                            result.trackingVideos.right2left = converted;
                         }
                     }
 
@@ -203,7 +198,9 @@ namespace SarabPlatform.Controllers
         {
             try
             {
-                // 1. حفظ ملف الـ MKV الأصلي مؤقتاً
+                // تحديد مسار FFmpeg
+                FFmpeg.SetExecutablesPath(@"C:\Program Files\ffmpeg-2026-03-15-git-6ba0b59d8b-full_build\bin");
+
                 string cleanBase64 = base64Data.Contains(",") ? base64Data.Split(',')[1] : base64Data;
                 var bytes = Convert.FromBase64String(cleanBase64);
                 string mkvPath = Path.Combine(uploadPath, fileNameNoExt + ".mkv");
@@ -211,12 +208,23 @@ namespace SarabPlatform.Controllers
 
                 await System.IO.File.WriteAllBytesAsync(mkvPath, bytes);
 
-                // 2. التحويل إلى MP4 (H.264)
-                // ملاحظة: تأكد من أن FFmpeg مثبت على السيرفر ومساره معروف للمكتبة
-                var conversion = await FFmpeg.Conversions.FromSnippet.ToMp4(mkvPath, mp4Path);
+                // حذف الملف القديم إن وجد
+                if (System.IO.File.Exists(mp4Path)) System.IO.File.Delete(mp4Path);
+
+                // تحويل صريح: hevc/gbrp → h264/yuv420p (متوافق مع جميع الأجهزة)
+                var conversion = FFmpeg.Conversions.New()
+                    .AddParameter($"-i \"{mkvPath}\"")
+                    .AddParameter("-c:v libx264")
+                    .AddParameter("-pix_fmt yuv420p")
+                    .AddParameter("-crf 28")
+                    .AddParameter("-preset fast")
+                    .AddParameter("-movflags +faststart")
+                    .SetOutput(mp4Path);
                 await conversion.Start();
 
-                // 3. إضافة ملف الـ MP4 لقاعدة البيانات
+                if (!System.IO.File.Exists(mp4Path))
+                    throw new Exception("FFmpeg conversion produced no output file");
+
                 _context.Files.Add(new ResourceFile
                 {
                     FileName = fileNameNoExt + ".mp4",
@@ -225,18 +233,18 @@ namespace SarabPlatform.Controllers
                     FileType = FileType.Video
                 });
 
-                // 4. إعادة الملف المحول كـ Base64 للموبايل
                 byte[] convertedBytes = await System.IO.File.ReadAllBytesAsync(mp4Path);
-                
-                // حذف ملف الـ mkv لتوفير المساحة (اختياري)
+
                 if (System.IO.File.Exists(mkvPath)) System.IO.File.Delete(mkvPath);
+
+                Console.WriteLine($"✅ Converted {fileNameNoExt} — MP4 size: {convertedBytes.Length} bytes");
 
                 return Convert.ToBase64String(convertedBytes);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Conversion Error: {ex.Message}");
-                return base64Data; // في حال الفشل نرسل الأصلي كـ fallback
+                Console.WriteLine($"❌ Conversion Error for {fileNameNoExt}: {ex.Message}");
+                return string.Empty;
             }
         }
 
@@ -260,7 +268,6 @@ namespace SarabPlatform.Controllers
             }
             catch { }
         }
-
 
         [HttpPost("upload")]
         public async Task<IActionResult> UploadSample([FromForm] CreateSampleDto dto)
@@ -493,23 +500,22 @@ namespace SarabPlatform.Controllers
             return NoContent();
         }
 
-
         [HttpPost("{id}/files/download")]
-        public async Task<IActionResult> DownloadFiles(int id ,[FromBody] DownloadFilesDto dto)
+        public async Task<IActionResult> DownloadFiles(int id, [FromBody] DownloadFilesDto dto)
         {
-            if(dto.FileIds == null || !dto.FileIds.Any())
+            if (dto.FileIds == null || !dto.FileIds.Any())
                 return BadRequest("No files selected");
 
             var sample = await _context.Samples.Include(s => s.Files).FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted);
 
             if (sample == null)
                 return NotFound("Sample not found");
-            
+
             var files = await _context.Files.Where(f => dto.FileIds.Contains(f.Id) && !f.IsDeleted && f.SampleId == id).ToListAsync();
-            if(files.Count != dto.FileIds.Count)
+            if (files.Count != dto.FileIds.Count)
                 return BadRequest("Some files do not belong to this sample");
-            
-            if(!files.Any())
+
+            if (!files.Any())
                 return NotFound("No files found");
 
             using var memoryStream = new MemoryStream();
@@ -518,15 +524,14 @@ namespace SarabPlatform.Controllers
             {
                 foreach (var file in files)
                 {
-                    if(!System.IO.File.Exists(file.FilePath))
+                    if (!System.IO.File.Exists(file.FilePath))
                         continue;
                     var entry = archive.CreateEntry(file.FileName);
 
-                    using var entryStream = entry.Open();    
+                    using var entryStream = entry.Open();
                     using FileStream fileStream = new FileStream(file.FilePath, FileMode.Open, FileAccess.Read);
-                    
+
                     await fileStream.CopyToAsync(entryStream);
-                    
                 }
             }
 
@@ -535,7 +540,6 @@ namespace SarabPlatform.Controllers
             memoryStream.Position = 0;
             return File(memoryStream.ToArray(), "application/zip", $"sample-{id}-files.zip");
         }
-
 
         [HttpPost("{id}/download")]
         public async Task<IActionResult> DownloadSample(int id)
@@ -572,7 +576,6 @@ namespace SarabPlatform.Controllers
             memoryStream.Position = 0;
             return File(memoryStream.ToArray(), "application/zip", $"sample-{id}.zip");
         }
-        
 
         [HttpPut("{id}/add-tags")]
         public async Task<IActionResult> AddTagsToSample(int id, AddTagsDto dto)
@@ -623,18 +626,15 @@ namespace SarabPlatform.Controllers
         {
             try
             {
-                // Validate pagination parameters
                 if (dto.Page < 1) dto.Page = 1;
                 if (dto.PageSize < 1 || dto.PageSize > 100) dto.PageSize = 10;
 
-                // Build the query with includes
                 var query = _context.Samples
                     .Include(s => s.Files.Where(f => !f.IsDeleted))
                     .Include(s => s.Tags)
                     .Where(s => !s.IsDeleted)
                     .AsQueryable();
 
-                // Apply filters
                 if (!string.IsNullOrWhiteSpace(dto.Gender))
                     query = query.Where(s => s.Gender == dto.Gender);
 
@@ -655,27 +655,23 @@ namespace SarabPlatform.Controllers
                         (!string.IsNullOrEmpty(s.Title) && s.Title.Contains(dto.Keyword)) ||
                         (!string.IsNullOrEmpty(s.Notes) && s.Notes.Contains(dto.Keyword)) ||
                         (!string.IsNullOrEmpty(s.City) && s.City.Contains(dto.Keyword)) ||
-                        (!string.IsNullOrEmpty(s.Status) && s.Status.Contains(dto.Keyword)) ||
+                        (!string.IsNullOrEmpty(s.Status) && s.Status.Contains(dto.Status)) ||
                         (!string.IsNullOrEmpty(s.Description) && s.Description.Contains(dto.Keyword))
                     );
 
                 if (dto.TagIds != null && dto.TagIds.Any())
                     query = query.Where(s => s.Tags.Any(t => dto.TagIds.Contains(t.Id)));
 
-                // Order results
                 query = query.OrderByDescending(s => s.CreatedAt);
 
-                // Get total count
                 var total = await query.CountAsync();
                 var totalPages = (int)Math.Ceiling(total / (double)dto.PageSize);
 
-                // Get paginated results
                 var samples = await query
                     .Skip((dto.Page - 1) * dto.PageSize)
                     .Take(dto.PageSize)
                     .ToListAsync();
 
-                // Map to response DTOs
                 var sampleDtos = samples.Select(s => new SampleResponseDto
                 {
                     Id = s.Id,
@@ -723,7 +719,7 @@ namespace SarabPlatform.Controllers
             }
         }
 
-       public class VisionServiceResponse
+        public class VisionServiceResponse
         {
             public TrackingVideos? trackingVideos { get; set; }
             public Maps? maps { get; set; }
@@ -741,6 +737,5 @@ namespace SarabPlatform.Controllers
             public string? right2left { get; set; }
             public string? fullMap { get; set; }
         }
-    
     }
 }

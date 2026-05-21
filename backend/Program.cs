@@ -56,6 +56,6 @@ app.UseSwagger();
 app.UseSwaggerUI();
 app.MapGet("/", () => "Root endpoint!");
 
-app.Run();
+app.Run("http://0.0.0.0:5027");
 
 
