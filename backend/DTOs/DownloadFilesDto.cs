@@ -1,4 +1,4 @@
-namespace SarabPlatform.Dto
+namespace SarabPlatform.DTO
 {
     public class DownloadFilesDto
     {

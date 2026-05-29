@@ -20,6 +20,7 @@ namespace SarabPlatform.Models
         public OwnerType OwnerType { get; set; }
         public int TemplateId { get; set; }
         public List<Folder>? Folders { get; set; }
+        public List<CollectionGroup>? VisibleToGroups { get; set; }
         public int DownloadCount { get; set; }
         public bool IsDeleted { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

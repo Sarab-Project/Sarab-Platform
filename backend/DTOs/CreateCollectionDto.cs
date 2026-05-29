@@ -9,6 +9,7 @@ namespace SarabPlatform.Dto
         public int OwnerId { get; set; }
         public OwnerType OwnerType { get; set; }
         public int TemplateId { get; set; }
+        public List<int>? AllowedGroupIds { get; set; }
     }
     
 }

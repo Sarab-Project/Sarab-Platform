@@ -30,12 +30,6 @@ namespace SarabPlatform.Models
         public bool IsActive { get; set; } = true;
         public bool IsVerified { get; set; } = false;
         public bool IsEmailVerified { get; set; } = false;
-        DateTime EmailVerifiedAt { get; set; }
-        DateTime LastLoginAt { get; set; }
-        DateTime LastPasswordChangeAt { get; set; }
-        int FailedLoginAttempts { get; set; } = 5;
-        DateTime LockedUntil { get; set; }
-        DateTime DeActivatedAt { get; set;}
     } 
 
     

@@ -16,6 +16,7 @@ namespace SarabPlatform.Data
         public DbSet<UserDocument> UserDocuments { get; set; }
         public DbSet<UserSession> UserSessions { get; set; }
         public DbSet<CollectionTemplate> CollectionTemplates { get; set; }
+        public DbSet<CollectionGroup> CollectionGroups { get; set; }
     
         public AppDbContext(DbContextOptions<AppDbContext>options) : base(options){}
 
@@ -80,6 +81,27 @@ namespace SarabPlatform.Data
                 .WithMany(g => g.Collections)
                 .HasForeignKey(c => c.GroupId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<Sample>()
+                .HasOne(s => s.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(s => s.CreatedBy)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<CollectionGroup>()
+                .HasKey(cg => new { cg.CollectionId, cg.GroupId });
+
+            modelBuilder.Entity<CollectionGroup>()
+                .HasOne(cg => cg.Collection)
+                .WithMany(c => c.VisibleToGroups)
+                .HasForeignKey(cg => cg.CollectionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<CollectionGroup>()
+                .HasOne(cg => cg.Group)
+                .WithMany(g => g.VisibleCollections)
+                .HasForeignKey(cg => cg.GroupId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
 
 

@@ -11,86 +11,76 @@ namespace SarabPlatform.Controllers
     public class ASRController : ControllerBase
     {
         private readonly IHttpClientFactory _httpClientFactory;
-        private readonly string _ffmpegPath = @"C:\Program Files\ffmpeg-2026-03-15-git-6ba0b59d8b-full_build\bin";
+
         public ASRController(IHttpClientFactory httpClientFactory)
         {
-        _httpClientFactory = httpClientFactory;
-        FFmpeg.SetExecutablesPath(_ffmpegPath);
+            _httpClientFactory = httpClientFactory;
+
+            // Direct path to the standard Linux installation directory
+            FFmpeg.SetExecutablesPath("/usr/bin");
         }
 
-
-
-    [HttpPost]
-    public async Task<IActionResult> ProcessVoice([FromForm] ASRDto dto)
-    {
-        // 1. التحقق من وجود الملف القادم من تطبيق الـ React Native
-        if (dto.AudioFile == null || dto.AudioFile.Length == 0)
-            return BadRequest("الملف الصوتي مفقود");
-
-        // إنشاء مسارات للملفات المؤقتة في السيرفر
-        var tempInput = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString() + Path.GetExtension(dto.AudioFile.FileName));
-        var tempOutput = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString() + ".wav");
-
-        try
+        [HttpPost]
+        public async Task<IActionResult> ProcessVoice([FromForm] ASRDto dto)
         {
-            // 2. حفظ الملف الأصلي (m4a/mp3) مؤقتاً
-            using (var stream = new FileStream(tempInput, FileMode.Create))
+            // 1. التحقق من وجود الملف القادم من تطبيق الـ React Native
+            if (dto.AudioFile == null || dto.AudioFile.Length == 0)
+                return BadRequest("الملف الصوتي مفقود");
+
+            var tempInput = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString() + Path.GetExtension(dto.AudioFile.FileName));
+            var tempOutput = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString() + ".wav");
+
+            try
             {
-                await dto.AudioFile.CopyToAsync(stream);
+                // 2. حفظ الملف الأصلي مؤقتاً
+                using (var stream = new FileStream(tempInput, FileMode.Create))
+                {
+                    await dto.AudioFile.CopyToAsync(stream);
+                }
+
+                // 3. التحويل إلى تنسيق WAV PCM 16-bit
+                await FFmpeg.Conversions.New()
+                    .AddParameter($"-i \"{tempInput}\"")
+                    .AddParameter("-acodec pcm_s16le") 
+                    .AddParameter("-ar 16000")        
+                    .AddParameter("-ac 1")            
+                    .SetOutput(tempOutput)
+                    .Start();
+
+                // 4. إعداد الاتصال بالخدمة الخارجية (FastAPI)
+                var client = _httpClientFactory.CreateClient();
+                client.Timeout = TimeSpan.FromMinutes(3);
+
+                string externalUrl = $"http://25.9.129.103:8000/api/Samples/{4}/analyze?encode=true&task=transcribe&output=txt";
+
+                using var content = new MultipartFormDataContent();
+                using var fileStream = System.IO.File.OpenRead(tempOutput);
+                var fileContent = new StreamContent(fileStream);
+                
+                fileContent.Headers.ContentType = new MediaTypeHeaderValue("audio/vnd.wave");
+                content.Add(fileContent, "audioFile", "audio.wav");
+
+                // 5. إرسال الطلب واستلام الرد
+                var response = await client.PostAsync(externalUrl, content);
+                var jsonResult = await response.Content.ReadAsStringAsync();
+
+                if (response.IsSuccessStatusCode)
+                {
+                    return Content(jsonResult, "application/json");
+                }
+
+                return StatusCode((int)response.StatusCode, jsonResult);
             }
-
-            // 3. التحويل إلى تنسيق WAV PCM 16-bit (المطلوب للخدمة الخارجية)
-            await FFmpeg.Conversions.New()
-                .AddParameter($"-i \"{tempInput}\"")
-                .AddParameter("-acodec pcm_s16le") 
-                .AddParameter("-ar 16000")        
-                .AddParameter("-ac 1")            
-                .SetOutput(tempOutput)
-                .Start();
-
-            // 4. إعداد الاتصال بالخدمة الخارجية (FastAPI)
-            var client = _httpClientFactory.CreateClient();
-            
-            // رفع الـ Timeout لأن معالجة الـ LLM (Qwen) تأخذ وقتاً طويلاً
-            client.Timeout = TimeSpan.FromMinutes(3);
-
-            // بناء الرابط مع الـ Query Parameters المطلوبة في main.py
-            // string sampleId = "sarab-ai-" + Guid.NewGuid().ToString().Substring(0, 8);
-            string externalUrl = $"http://25.9.129.103:8000/api/Samples/{4}/analyze?encode=true&task=transcribe&output=txt";
-
-            using var content = new MultipartFormDataContent();
-            using var fileStream = System.IO.File.OpenRead(tempOutput);
-            var fileContent = new StreamContent(fileStream);
-            
-            // استخدام النوع المتوافق مع Swagger الخاص بالخدمة
-            fileContent.Headers.ContentType = new MediaTypeHeaderValue("audio/vnd.wave");
-
-            // ملاحظة: تم تغيير الاسم إلى "audioFile" ليطابق كود البايثون تماماً
-            content.Add(fileContent, "audioFile", "audio.wav");
-
-            // 5. إرسال الطلب واستلام الرد
-            var response = await client.PostAsync(externalUrl, content);
-            var jsonResult = await response.Content.ReadAsStringAsync();
-
-            if (response.IsSuccessStatusCode)
+            catch (Exception ex)
             {
-                // إعادة النتيجة (التي تحتوي على الحقول الموزعة) للموبايل
-                return Content(jsonResult, "application/json");
+                return StatusCode(500, $"خطأ داخلي في السيرفر: {ex.Message}");
             }
-
-            return StatusCode((int)response.StatusCode, jsonResult);
+            finally
+            {
+                // 6. تنظيف الملفات المؤقتة
+                if (System.IO.File.Exists(tempInput)) System.IO.File.Delete(tempInput);
+                if (System.IO.File.Exists(tempOutput)) System.IO.File.Delete(tempOutput);
+            }
         }
-        catch (Exception ex)
-        {
-            return StatusCode(500, $"خطأ داخلي في السيرفر: {ex.Message}");
-        }
-        finally
-        {
-            // 6. تنظيف الملفات المؤقتة فوراً لضمان عدم امتلاء القرص الصلب
-            if (System.IO.File.Exists(tempInput)) System.IO.File.Delete(tempInput);
-            if (System.IO.File.Exists(tempOutput)) System.IO.File.Delete(tempOutput);
-        }
-    }
-        
     }
 }

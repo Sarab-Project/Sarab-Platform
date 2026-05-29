@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SarabPlatform.Data;
 using SarabPlatform.Models;
@@ -12,6 +13,7 @@ namespace SarabPlatform.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize(Policy = "AdminOnly")]
  public class UsersController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -23,20 +25,71 @@ namespace SarabPlatform.Controllers
         [HttpGet]
         public ActionResult GetUsers()
         {
-            var users = _context.Users.ToList();
+            var users = _context.Users
+                .Include(u => u.UserSessions)
+                .Select(u => new
+                {
+                    u.Id,
+                    u.FirstName,
+                    u.LastName,
+                    u.Email,
+                    u.Role,
+                    u.IsActive,
+                    u.IsVerified,
+                    u.IsEmailVerified,
+                    u.CreatedAt,
+                    u.UpdatedAt,
+                    LastLogin = u.UserSessions.OrderByDescending(s => s.LastLogin).Select(s => s.LastLogin).FirstOrDefault(),
+                    ActiveSessions = u.UserSessions.Count(s => !s.IsRevoked && s.ExpiresAt > DateTime.UtcNow),
+                    TotalSessions = u.UserSessions.Count()
+                })
+                .ToList();
+
             return Ok(users);
         }
 
         [HttpGet("{id}")]
-        public ActionResult<User> GetUser(int id)
+        public ActionResult GetUser(int id)
         {
             try
             {
-                var user = _context.Users.Find(id);
+                var user = _context.Users
+                    .Include(u => u.UserSessions)
+                    .FirstOrDefault(u => u.Id == id);
                 if (user == null)
                     return NotFound();
 
-                return Ok(user);
+                var latestSession = user.UserSessions?
+                    .OrderByDescending(s => s.LastLogin)
+                    .Select(s => new
+                    {
+                        s.LastLogin,
+                        s.IpAddress,
+                        s.DeviceInfo,
+                        s.ExpiresAt,
+                        s.IsRevoked
+                    })
+                    .FirstOrDefault();
+
+                return Ok(new
+                {
+                    user.Id,
+                    user.FirstName,
+                    user.LastName,
+                    user.Email,
+                    user.Role,
+                    user.IsActive,
+                    user.IsVerified,
+                    user.IsEmailVerified,
+                    user.CreatedAt,
+                    user.UpdatedAt,
+                    LastLogin = latestSession?.LastLogin,
+                    LatestSessionIp = latestSession?.IpAddress,
+                    LatestSessionDevice = latestSession?.DeviceInfo,
+                    LatestSessionExpiresAt = latestSession?.ExpiresAt,
+                    LatestSessionRevoked = latestSession?.IsRevoked,
+                    TotalSessions = user.UserSessions?.Count ?? 0
+                });
             }
             catch (Exception ex)
             {
@@ -47,6 +100,11 @@ namespace SarabPlatform.Controllers
         [HttpPost]
         public ActionResult<User> CreateUser(CreateUserDto dto)
         {
+            if (!System.Enum.TryParse<UserRole>(dto.Role, true, out var parsedRole) || parsedRole == UserRole.Admin)
+            {
+                return BadRequest("Role must be Researcher or Contributor");
+            }
+
             var hashedPassword = BCrypt.Net.BCrypt.HashPassword(dto.Password);
             var user = new User
             {
@@ -54,12 +112,37 @@ namespace SarabPlatform.Controllers
               LastName = dto.LastName,
               Email = dto.Email,
               PasswordHash = hashedPassword,
-              Role = UserRole.Researcher,
+              Role = parsedRole,
               CreatedAt = DateTime.UtcNow,
             };
             _context.Users.Add(user);
             _context.SaveChanges();
+
+            CreateDefaultCollectionsForUser(user, parsedRole);
+            _context.SaveChanges();
+
             return CreatedAtAction(nameof(GetUser), new { id = user.Id }, user);
+        }
+
+        private void CreateDefaultCollectionsForUser(User user, UserRole role)
+        {
+            if (role != UserRole.Contributor)
+            {
+                return;
+            }
+
+            _context.Collections.Add(
+                new Collection
+                {
+                    Name = "Private Collection",
+                    Description = "Private collection visible only to this contributor",
+                    CreatedBy = user.Id,
+                    OwnerId = user.Id,
+                    OwnerType = OwnerType.User,
+                    TemplateId = 0,
+                    CreatedAt = DateTime.UtcNow
+                }
+            );
         }
 
         [HttpPut("{id}")]
@@ -92,8 +175,13 @@ namespace SarabPlatform.Controllers
             if (user == null)
                 return NotFound();
 
-            _context.Users.Remove(user);
+            if (!user.IsActive)
+                return BadRequest("User is already deactivated.");
+
+            user.IsActive = false;
+            user.UpdatedAt = DateTime.UtcNow;
             _context.SaveChanges();
+
             return NoContent();
         }
 
@@ -215,7 +303,7 @@ namespace SarabPlatform.Controllers
 
 
         [HttpPut("{userId}/documents/{documentId}/review")]
-        public IActionResult ReviewUserDocument(int userId, int adminId, int documentId, ReviewDocumentDto dto)
+        public IActionResult ReviewUserDocument(int userId, int adminId, int documentId, DTO.ReviewDocumentDto dto)
         {
             var admin = _context.Users.Find(adminId);
             if (admin == null || admin.Role != UserRole.Admin)

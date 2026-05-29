@@ -11,19 +11,13 @@ namespace SarabPlatform.Services
             if (file.ContentType.StartsWith("video/"))
             {
                 fileType = FileType.Video;
-            }
-            else if (file.ContentType.StartsWith("image/"))
+            }else if (file.ContentType.StartsWith("image/"))
             {
                 fileType = FileType.Image;
-            }
-            else if (file.ContentType.StartsWith("audio/"))
-            {
-                fileType = FileType.Audio;
-            }
-            else
+            }else
             {
                 throw new Exception("Invalid Content Type");
-            }
+            }    
             
             var fileName = Guid.NewGuid() + Path.GetExtension(file.FileName);
             var filePath = Path.Combine(folderPath,fileName);

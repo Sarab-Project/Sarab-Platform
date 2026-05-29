@@ -1,6 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using SarabPlatform.Models;
 using SarabPlatform.Data;
 
 namespace SarabPlatform.Controllers
@@ -17,74 +17,22 @@ namespace SarabPlatform.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetAllTags()
+        [AllowAnonymous]
+        public async Task<IActionResult> GetAvailableTags()
         {
-            var tags = _context.Tags;
-            return Ok(tags);
+            try
+            {
+                var tags = await _context.Tags
+                    .OrderBy(t => t.Name)
+                    .Select(t => new { t.Id, t.Name })
+                    .ToListAsync();
+
+                return Ok(tags);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+            }
         }
-
-        [HttpPut("{id}")]
-        public IActionResult EditTag(int id, string newName)
-        {
-            var tag = _context.Tags.FirstOrDefault(t => t.Id == id);
-            if (tag == null)
-            {
-                return NotFound("Tag not found.");
-            }
-
-            if (string.IsNullOrWhiteSpace(newName))
-            {
-                return BadRequest("New tag name cannot be empty.");
-            }
-
-            var existingTag = _context.Tags.FirstOrDefault(t => t.Name == newName);
-            if (existingTag != null)
-            {
-                return Conflict("A tag with this name already exists.");
-            }
-
-            tag.Name = newName;
-            _context.SaveChanges();
-
-            return Ok(tag);
-        }
-
-        [HttpPost]
-        public IActionResult CreateTag(string tagName)
-        {
-            if (string.IsNullOrWhiteSpace(tagName))
-            {
-                return BadRequest("Tag name cannot be empty.");
-            }
-
-            var existingTag = _context.Tags.FirstOrDefault(t => t.Name == tagName);
-            if (existingTag != null)
-            {
-                return Conflict("A tag with this name already exists.");
-            }
-
-            var newTag = new Models.Tag { Name = tagName };
-            _context.Tags.Add(newTag);
-            _context.SaveChanges();
-
-            return CreatedAtAction(nameof(GetAllTags), new { id = newTag.Id }, newTag);
-        }
-
-
-        [HttpDelete("{id}")]
-        public IActionResult DeleteTag(int id)
-        {
-            var tag = _context.Tags.FirstOrDefault(t => t.Id == id);
-            if (tag == null)
-            {
-                return NotFound("Tag not found.");
-            }
-
-            _context.Tags.Remove(tag);
-            _context.SaveChanges();
-
-            return Ok(tag);
-        }
-
     }
 }

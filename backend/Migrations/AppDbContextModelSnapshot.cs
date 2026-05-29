@@ -91,6 +91,21 @@ namespace Sarab_Platform.Migrations
                     b.ToTable("Collections");
                 });
 
+            modelBuilder.Entity("SarabPlatform.Models.CollectionGroup", b =>
+                {
+                    b.Property<int>("CollectionId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("GroupId")
+                        .HasColumnType("int");
+
+                    b.HasKey("CollectionId", "GroupId");
+
+                    b.HasIndex("GroupId");
+
+                    b.ToTable("CollectionGroups");
+                });
+
             modelBuilder.Entity("SarabPlatform.Models.CollectionTemplate", b =>
                 {
                     b.Property<int>("Id")
@@ -264,6 +279,9 @@ namespace Sarab_Platform.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<string>("Metadata")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("SampleId")
                         .HasColumnType("int");
 
@@ -291,13 +309,6 @@ namespace Sarab_Platform.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("Age")
-                        .HasColumnType("int");
-
-                    b.Property<string>("City")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -316,22 +327,10 @@ namespace Sarab_Platform.Migrations
                     b.Property<int?>("FolderId")
                         .HasColumnType("int");
 
-                    b.Property<string>("Gender")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
                     b.Property<string>("Metadata")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Notes")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Title")
@@ -344,7 +343,12 @@ namespace Sarab_Platform.Migrations
                     b.Property<int?>("UserId")
                         .HasColumnType("int");
 
+                    b.Property<int>("ViewCount")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("CreatedBy");
 
                     b.HasIndex("FolderId");
 
@@ -542,6 +546,25 @@ namespace Sarab_Platform.Migrations
                     b.Navigation("Group");
                 });
 
+            modelBuilder.Entity("SarabPlatform.Models.CollectionGroup", b =>
+                {
+                    b.HasOne("SarabPlatform.Models.Collection", "Collection")
+                        .WithMany("VisibleToGroups")
+                        .HasForeignKey("CollectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SarabPlatform.Models.Group", "Group")
+                        .WithMany("VisibleCollections")
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Collection");
+
+                    b.Navigation("Group");
+                });
+
             modelBuilder.Entity("SarabPlatform.Models.Folder", b =>
                 {
                     b.HasOne("SarabPlatform.Models.Collection", "Collection")
@@ -598,6 +621,12 @@ namespace Sarab_Platform.Migrations
 
             modelBuilder.Entity("SarabPlatform.Models.Sample", b =>
                 {
+                    b.HasOne("SarabPlatform.Models.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("SarabPlatform.Models.Folder", "Folder")
                         .WithMany("Samples")
                         .HasForeignKey("FolderId");
@@ -605,6 +634,8 @@ namespace Sarab_Platform.Migrations
                     b.HasOne("SarabPlatform.Models.User", null)
                         .WithMany("Samples")
                         .HasForeignKey("UserId");
+
+                    b.Navigation("CreatedByUser");
 
                     b.Navigation("Folder");
                 });
@@ -632,6 +663,8 @@ namespace Sarab_Platform.Migrations
             modelBuilder.Entity("SarabPlatform.Models.Collection", b =>
                 {
                     b.Navigation("Folders");
+
+                    b.Navigation("VisibleToGroups");
                 });
 
             modelBuilder.Entity("SarabPlatform.Models.Folder", b =>
@@ -646,6 +679,8 @@ namespace Sarab_Platform.Migrations
                     b.Navigation("Collections");
 
                     b.Navigation("Members");
+
+                    b.Navigation("VisibleCollections");
                 });
 
             modelBuilder.Entity("SarabPlatform.Models.Sample", b =>

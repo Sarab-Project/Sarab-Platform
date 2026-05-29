@@ -1,7 +1,7 @@
 using SarabPlatform.Enum;
 
 
-namespace SarabPlatform.Dto
+namespace SarabPlatform.DTO
 {
     public class ReviewDocumentDto
     {

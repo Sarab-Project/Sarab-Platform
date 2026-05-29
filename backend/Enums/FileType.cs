@@ -4,6 +4,6 @@ namespace SarabPlatform.Enum
     {
         Image,
         Video,
-        Audio
+        Document
     }
 }

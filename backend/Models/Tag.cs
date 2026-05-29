@@ -4,6 +4,6 @@ namespace SarabPlatform.Models
     {
         public int Id { get; set; }
         public string? Name { get; set; }
-        public List<Sample> Samples { get; set; } = new();
+        public List<Sample>? Samples { get; set; } = new();
     }
 }
