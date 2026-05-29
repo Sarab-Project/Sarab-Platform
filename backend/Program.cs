@@ -50,6 +50,13 @@ builder.Services.AddCors(options => options.AddPolicy("AllowAll", policy => poli
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.Migrate();
+    SeedDefaults(db, app.Environment.ContentRootPath);
+}
+
 if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 
