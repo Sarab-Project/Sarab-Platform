@@ -5,7 +5,7 @@ services:
     ports:
       # .NET 8 containers default to port 8080. 
       # Change the left side if you want a different port on your host.
-      - "5027:8080" 
+      - "5027:5027" 
     environment:
       # This automatically overrides the connection string in your appsettings.json!
       # Notice the double underscore (__). This is how Docker talks to .NET config.
