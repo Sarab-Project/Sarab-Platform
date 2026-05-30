@@ -9,6 +9,10 @@ backend/bin/
 backend/obj/
 backend/ffmpeg-8.1.1-full_build/
 
+# --- Test Projects ---
+Sarab-Platform.Tests/bin/
+Sarab-Platform.Tests/obj/
+
 # --- General ---
 *.log
 *.env

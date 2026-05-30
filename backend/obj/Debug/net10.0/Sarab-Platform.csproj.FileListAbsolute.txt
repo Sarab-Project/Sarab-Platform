@@ -6,7 +6,6 @@ C:\Users\User\Desktop\Sarab-Platform\backend\bin\Debug\net10.0\Sarab-Platform.de
 C:\Users\User\Desktop\Sarab-Platform\backend\bin\Debug\net10.0\Sarab-Platform.runtimeconfig.json
 C:\Users\User\Desktop\Sarab-Platform\backend\bin\Debug\net10.0\Sarab-Platform.dll
 C:\Users\User\Desktop\Sarab-Platform\backend\bin\Debug\net10.0\Sarab-Platform.pdb
-C:\Users\User\Desktop\Sarab-Platform\backend\bin\Debug\net10.0\Sarab-Platform.xml
 C:\Users\User\Desktop\Sarab-Platform\backend\bin\Debug\net10.0\Azure.Core.dll
 C:\Users\User\Desktop\Sarab-Platform\backend\bin\Debug\net10.0\Azure.Identity.dll
 C:\Users\User\Desktop\Sarab-Platform\backend\bin\Debug\net10.0\BCrypt.Net-Next.dll
@@ -160,7 +159,10 @@ C:\Users\User\Desktop\Sarab-Platform\backend\obj\Debug\net10.0\swae.build.ex.cac
 C:\Users\User\Desktop\Sarab-Platform\backend\obj\Debug\net10.0\Sarab-Pl.EECB9516.Up2Date
 C:\Users\User\Desktop\Sarab-Platform\backend\obj\Debug\net10.0\Sarab-Platform.dll
 C:\Users\User\Desktop\Sarab-Platform\backend\obj\Debug\net10.0\refint\Sarab-Platform.dll
-C:\Users\User\Desktop\Sarab-Platform\backend\obj\Debug\net10.0\Sarab-Platform.xml
 C:\Users\User\Desktop\Sarab-Platform\backend\obj\Debug\net10.0\Sarab-Platform.pdb
 C:\Users\User\Desktop\Sarab-Platform\backend\obj\Debug\net10.0\Sarab-Platform.genruntimeconfig.cache
 C:\Users\User\Desktop\Sarab-Platform\backend\obj\Debug\net10.0\ref\Sarab-Platform.dll
+C:\Users\User\Desktop\Sarab-Platform\backend\bin\Debug\net10.0\dotnet-tools.json
+C:\Users\User\Desktop\Sarab-Platform\backend\bin\Debug\net10.0\tags.json
+C:\Users\User\Desktop\Sarab-Platform\backend\bin\Debug\net10.0\Microsoft.AspNetCore.Authentication.JwtBearer.dll
+C:\Users\User\Desktop\Sarab-Platform\backend\obj\Debug\net10.0\staticwebassets.upToDateCheck.txt
