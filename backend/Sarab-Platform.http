@@ -1,0 +1,6 @@
+@Sarab_Platform_HostAddress = http://localhost:5027
+
+GET {{Sarab_Platform_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

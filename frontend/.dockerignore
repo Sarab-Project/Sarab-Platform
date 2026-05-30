@@ -1,0 +1,70 @@
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Dependencies
+node_modules
+pnpm-store
+.pnpm
+
+# Build outputs
+dist
+build
+*.tsbuildinfo
+
+# Development
+.vite
+.env.local
+.env.*.local
+
+# IDE and Editor
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS files
+.DS_Store
+
+# Documentation
+README.md
+CHANGELOG.md
+guidelines/
+
+# Tests
+__tests__
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Config
+.eslintignore
+.prettierignore
+postcss.config.mjs
+tsconfig.json
+tsconfig.app.json
+tsconfig.node.json
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.circleci
+
+# Docker files (to prevent building inside docker)
+Dockerfile
+docker-compose.yml
+docker-compose.*.yml
+
+# Workspace
+pnpm-workspace.yaml
