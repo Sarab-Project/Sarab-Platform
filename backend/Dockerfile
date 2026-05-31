@@ -6,7 +6,6 @@ ENV ASPNETCORE_URLS=http://+:5027
 
 RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
 
-USER app
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG configuration=Release
 WORKDIR /src
@@ -22,5 +21,9 @@ RUN dotnet publish "Sarab-Platform.csproj" -c $configuration -o /app/publish /p:
 
 FROM base AS final
 WORKDIR /app
-COPY --from=publish /app/publish .
+
+RUN mkdir -p /app/Uploads && chown -R app:app /app/Uploads
+
+USER app
+
 ENTRYPOINT ["dotnet", "Sarab-Platform.dll"]

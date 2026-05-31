@@ -15,6 +15,19 @@ services:
     depends_on:
       - sqlserver
 
+  frontend:
+    image: sarab-frontend:latest
+    container_name: sarab_frontend
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+      - sqlserver
+    restart: unless-stopped
+
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: Sarab_sqlserver
