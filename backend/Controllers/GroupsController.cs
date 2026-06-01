@@ -71,7 +71,6 @@ namespace SarabPlatform.Controllers
         }
 
         [HttpGet]
-        [AllowAnonymous]
         public IActionResult GetGroups()
         {
             var currentUserId = GetCurrentUserId();
@@ -111,7 +110,6 @@ namespace SarabPlatform.Controllers
         }
 
         [HttpGet("{id}")]
-        [AllowAnonymous]
         public IActionResult GetGroup(int id)
         {
             var currentUserId = GetCurrentUserId();
@@ -131,7 +129,7 @@ namespace SarabPlatform.Controllers
         }
 
         [HttpPost]
-        [Authorize(Policy = "CanCreateGroups")]
+        [Authorize]
         public IActionResult CreateGroup(CreateGroupDto dto)
         {
             var creatorIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
@@ -231,6 +229,12 @@ namespace SarabPlatform.Controllers
                     return BadRequest($"User with ID {member.UserId} not found.");
                 }
 
+                // Prevent adding admins to groups
+                if (user.Role == UserRole.Admin)
+                {
+                    return BadRequest($"Cannot add admin users to groups.");
+                }
+
                 // Check if already a member
                 if (_context.GroupMembers.Any(gm => gm.GroupId == groupId && gm.UserId == member.UserId))
                 {
@@ -313,6 +317,12 @@ namespace SarabPlatform.Controllers
                 if (user == null)
                 {
                     return BadRequest($"User with email '{member.Email}' not found.");
+                }
+
+                // Prevent adding admins to groups
+                if (user.Role == UserRole.Admin)
+                {
+                    return BadRequest($"Cannot add admin users to groups.");
                 }
 
                 if (currentUserId.Value == user.Id)

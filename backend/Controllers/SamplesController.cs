@@ -26,10 +26,11 @@ namespace SarabPlatform.Controllers
         private readonly FileService _fileService;
         private readonly IHttpClientFactory _httpClientFactory;
 
-        public SamplesController(AppDbContext context, FileService fileService)
+        public SamplesController(AppDbContext context, FileService fileService, IHttpClientFactory httpClientFactory)
         {
             _context = context;
             _fileService = fileService;
+            _httpClientFactory = httpClientFactory;
         }
 
         private IQueryable<Sample> GetActiveSamplesQuery()
@@ -67,8 +68,34 @@ namespace SarabPlatform.Controllers
                 (gm.Role == GroupRole.Owner || gm.Role == GroupRole.Contributor));
         }
 
+        private bool CanManageSample(Sample sample, int currentUserId)
+        {
+            if (IsAdminUser())
+                return true;
+
+            if (sample.Folder == null || sample.Folder.Collection == null)
+                return false;
+
+            if (sample.CreatedBy == currentUserId)
+                return true;
+
+            var collection = sample.Folder.Collection;
+            if (collection.OwnerType == OwnerType.User && collection.OwnerId == currentUserId)
+                return true;
+
+            return collection.OwnerType == OwnerType.Group && UserIsGroupContributor(currentUserId, collection.OwnerId);
+        }
+
+        private string GetSampleMetadata(Sample sample)
+        {
+            if (!string.IsNullOrWhiteSpace(sample.Metadata))
+                return sample.Metadata!;
+
+            var firstFileMetadata = sample.Files?.FirstOrDefault()?.Metadata;
+            return string.IsNullOrWhiteSpace(firstFileMetadata) ? string.Empty : firstFileMetadata!;
+        }
+
         [HttpGet]
-        [AllowAnonymous]
         public async Task<IActionResult> GetSamples()
         {
             var currentUserId = GetCurrentUserId();
@@ -88,7 +115,6 @@ namespace SarabPlatform.Controllers
         }
 
         [HttpGet("{id}")]
-        [AllowAnonymous]
         public async Task<IActionResult> GetSample(int id)
         {
             try
@@ -120,7 +146,6 @@ namespace SarabPlatform.Controllers
         }
 
         [HttpPost("search")]
-        [AllowAnonymous]
         public async Task<IActionResult> SearchSamples([FromBody] SearchSampleDto dto)
         {
             try
@@ -226,26 +251,32 @@ namespace SarabPlatform.Controllers
         {
             if (!string.IsNullOrWhiteSpace(sample.Metadata))
             {
-                try
+                var metadataValue = TryGetMetadataValue(sample.Metadata, key);
+                if (!string.IsNullOrWhiteSpace(metadataValue))
+                    return metadataValue;
+            }
+
+            if (sample.Files != null)
+            {
+                foreach (var file in sample.Files)
                 {
-                    var metadata = JsonSerializer.Deserialize<Dictionary<string, object>>(sample.Metadata);
-                    if (metadata != null && metadata.TryGetValue(key, out var value))
-                    {
-                        return value?.ToString();
-                    }
-                }
-                catch
-                {
+                    if (string.IsNullOrWhiteSpace(file.Metadata))
+                        continue;
+
+                    var metadataValue = TryGetMetadataValue(file.Metadata, key);
+                    if (!string.IsNullOrWhiteSpace(metadataValue))
+                        return metadataValue;
                 }
             }
 
-            var firstFile = sample.Files?.FirstOrDefault();
-            if (firstFile == null || string.IsNullOrWhiteSpace(firstFile.Metadata))
-                return null;
+            return null;
+        }
 
+        private static string? TryGetMetadataValue(string json, string key)
+        {
             try
             {
-                var metadata = JsonSerializer.Deserialize<Dictionary<string, object>>(firstFile.Metadata);
+                var metadata = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
                 if (metadata != null && metadata.TryGetValue(key, out var value))
                 {
                     return value?.ToString();
@@ -303,10 +334,12 @@ namespace SarabPlatform.Controllers
             // Contributor name search
             if (sample.CreatedByUser != null)
             {
-                var fullName = $"{sample.CreatedByUser.FirstName} {sample.CreatedByUser.LastName}".ToLowerInvariant();
+                var firstName = sample.CreatedByUser.FirstName ?? string.Empty;
+                var lastName = sample.CreatedByUser.LastName ?? string.Empty;
+                var fullName = $"{firstName} {lastName}".ToLowerInvariant();
                 if (fullName.Contains(value) ||
-                    sample.CreatedByUser.FirstName.Contains(value, StringComparison.OrdinalIgnoreCase) ||
-                    sample.CreatedByUser.LastName.Contains(value, StringComparison.OrdinalIgnoreCase))
+                    firstName.Contains(value, StringComparison.OrdinalIgnoreCase) ||
+                    lastName.Contains(value, StringComparison.OrdinalIgnoreCase))
                     return true;
             }
 
@@ -553,6 +586,7 @@ namespace SarabPlatform.Controllers
         }
 
         [HttpPost("upload")]
+        [Authorize(Policy = "ContributorOrAdmin")]
         public async Task<IActionResult> UploadSample([FromForm] CreateSampleDto dto)
         {
             var folder = await _context.Folders.FirstOrDefaultAsync(f => f.Id == dto.FolderId);
@@ -661,14 +695,23 @@ namespace SarabPlatform.Controllers
         }
 
         [HttpPut("{id}")]
+        [Authorize(Policy = "ContributorOrAdmin")]
         public async Task<IActionResult> UpdateSample(int id, [FromForm] UpdateSampleDto dto)
         {
+            var currentUserId = GetCurrentUserId();
+            if (currentUserId == 0)
+                return Unauthorized();
+
             var sample = await _context.Samples
                 .Include(s => s.Files)
+                .Include(s => s.Folder!).ThenInclude(f => f.Collection!)
                 .FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted);
 
             if (sample == null)
                 return NotFound();
+
+            if (!CanManageSample(sample, currentUserId))
+                return Forbid("You are not authorized to update this sample.");
 
             Folder? folder = null;
             if (dto.FolderId.HasValue)
@@ -686,33 +729,49 @@ namespace SarabPlatform.Controllers
 
             // Update metadata on the first file
             var firstFile = sample.Files?.FirstOrDefault(f => !f.IsDeleted);
-            if (firstFile != null)
+            var metadata = new Dictionary<string, object>();
+            string? existingMetadataJson = null;
+            if (!string.IsNullOrWhiteSpace(sample.Metadata))
             {
-                var metadata = string.IsNullOrWhiteSpace(firstFile.Metadata)
-                    ? new Dictionary<string, object>()
-                    : JsonSerializer.Deserialize<Dictionary<string, object>>(firstFile.Metadata) ?? new Dictionary<string, object>();
+                existingMetadataJson = sample.Metadata;
+            }
+            else if (firstFile != null && !string.IsNullOrWhiteSpace(firstFile.Metadata))
+            {
+                existingMetadataJson = firstFile.Metadata;
+            }
 
-                if (!string.IsNullOrWhiteSpace(dto.EyeSide))
-                    metadata["EyeSide"] = dto.EyeSide;
+            if (!string.IsNullOrWhiteSpace(existingMetadataJson))
+            {
+                metadata = JsonSerializer.Deserialize<Dictionary<string, object>>(existingMetadataJson) ?? new Dictionary<string, object>();
+            }
 
-                if (!string.IsNullOrWhiteSpace(dto.Gender))
-                    metadata["Gender"] = dto.Gender;
+            if (!string.IsNullOrWhiteSpace(dto.EyeSide))
+                metadata["EyeSide"] = dto.EyeSide;
 
-                if (dto.Age.HasValue)
-                    metadata["Age"] = dto.Age.Value;
+            if (!string.IsNullOrWhiteSpace(dto.Gender))
+                metadata["Gender"] = dto.Gender;
 
-                if (!string.IsNullOrWhiteSpace(dto.City))
-                    metadata["City"] = dto.City;
+            if (dto.Age.HasValue)
+                metadata["Age"] = dto.Age.Value;
 
-                if (!string.IsNullOrWhiteSpace(dto.Status))
-                    metadata["Status"] = dto.Status;
+            if (!string.IsNullOrWhiteSpace(dto.City))
+                metadata["City"] = dto.City;
 
-                if (!string.IsNullOrWhiteSpace(dto.Profession))
-                    metadata["Profession"] = dto.Profession;
+            if (!string.IsNullOrWhiteSpace(dto.Status))
+                metadata["Status"] = dto.Status;
 
-                if (!string.IsNullOrWhiteSpace(dto.Notes))
-                    metadata["Notes"] = dto.Notes;
+            if (!string.IsNullOrWhiteSpace(dto.Profession))
+                metadata["Profession"] = dto.Profession;
 
+            if (!string.IsNullOrWhiteSpace(dto.Notes))
+                metadata["Notes"] = dto.Notes;
+
+            if (!string.IsNullOrWhiteSpace(sample.Metadata) || firstFile == null)
+            {
+                sample.Metadata = JsonSerializer.Serialize(metadata);
+            }
+            else if (firstFile != null)
+            {
                 firstFile.Metadata = JsonSerializer.Serialize(metadata);
             }
 
@@ -727,9 +786,7 @@ namespace SarabPlatform.Controllers
             var deletedFilesCount = 0;
             if (dto.DeletedFiles != null && dto.DeletedFiles.Any())
             {
-                var filesToDelete = sample.Files
-                    .Where(f => !f.IsDeleted && dto.DeletedFiles.Contains(f.Id))
-                    .ToList();
+                var filesToDelete = sample.Files?.Where(f => !f.IsDeleted && dto.DeletedFiles.Contains(f.Id)).ToList() ?? new List<ResourceFile>();
 
                 deletedFilesCount = filesToDelete.Count;
 
@@ -798,13 +855,23 @@ namespace SarabPlatform.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Policy = "AdminOnly")]
+        [Authorize(Policy = "ContributorOrAdmin")]
         public async Task<IActionResult> DeleteSample(int id)
         {
-            var sample = await _context.Samples.Include(s => s.Files).FirstOrDefaultAsync(s => s.Id == id);
+            var currentUserId = GetCurrentUserId();
+            if (currentUserId == 0)
+                return Unauthorized();
+
+            var sample = await _context.Samples
+                .Include(s => s.Files)
+                .Include(s => s.Folder!).ThenInclude(f => f.Collection!)
+                .FirstOrDefaultAsync(s => s.Id == id);
 
             if (sample == null)
                 return NotFound();
+
+            if (!CanManageSample(sample, currentUserId))
+                return Forbid("You are not authorized to delete this sample.");
 
             sample.IsDeleted = true;
             sample.DeletedAt = DateTime.UtcNow;
@@ -905,14 +972,15 @@ namespace SarabPlatform.Controllers
             using var memoryStream = new MemoryStream();
             using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, true))
             {
-                foreach (var sample in samples)
+                    foreach (var sample in samples)
                 {
                     var sampleFolder = $"sample-{sample.Id}";
+                    var metadataText = GetSampleMetadata(sample);
                     var metadataEntry = archive.CreateEntry($"{sampleFolder}/metadata.txt");
                     using (var entryStream = metadataEntry.Open())
                     using (var streamWriter = new StreamWriter(entryStream))
                     {
-                        streamWriter.Write(sample.Metadata);
+                        streamWriter.Write(metadataText);
                     }
 
                     foreach (var file in sample.Files ?? new List<ResourceFile>())
@@ -967,11 +1035,12 @@ namespace SarabPlatform.Controllers
 
             using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, true))
             {
+                var metadataText = GetSampleMetadata(sample);
                 var metadataEntry = archive.CreateEntry("metadata.txt");
                 using (var entryStream = metadataEntry.Open())
                 using (var streamWriter = new StreamWriter(entryStream))
                 {
-                    streamWriter.Write(sample.Metadata);
+                    streamWriter.Write(metadataText);
                 }
 
                 foreach (var file in sample.Files ?? new List<ResourceFile>())

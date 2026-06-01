@@ -78,7 +78,6 @@ namespace SarabPlatform.Controllers
         }
 
         [HttpGet]
-        [AllowAnonymous]
         public IActionResult GetCollections()
         {
             var currentUserId = GetCurrentUserId();
@@ -102,7 +101,6 @@ namespace SarabPlatform.Controllers
         }
         
         [HttpGet("{id}")]
-        [AllowAnonymous]
         public IActionResult GetCollection(int id)
         {
             var currentUserId = GetCurrentUserId();
@@ -139,7 +137,7 @@ namespace SarabPlatform.Controllers
         }
 
         [HttpPost]
-        [Authorize(Policy = "AdminOnly")]
+        [Authorize(Policy = "ContributorOrAdmin")]
         public IActionResult CreateCollection([FromBody] CreateCollectionDto dto)
         {
             var currentUserId = GetCurrentUserId();

@@ -16,6 +16,7 @@ builder.Services.AddControllers().AddJsonOptions(options =>
 
 builder.Services.AddScoped<FileService>();
 builder.Services.AddScoped<TokenService>();
+builder.Services.AddHttpClient();
 
 // Database configuration
 builder.Services.AddDbContext<AppDbContext>(options =>

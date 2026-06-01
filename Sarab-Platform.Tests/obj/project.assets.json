@@ -3357,39 +3357,32 @@
     ]
   },
   "packageFolders": {
-    "C:\\Users\\User\\.nuget\\packages\\": {},
-    "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
+    "C:\\Users\\ASUS\\.nuget\\packages\\": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "c:\\Users\\User\\Desktop\\Sarab-Platform\\Sarab-Platform.Tests\\Sarab-Platform.Tests.csproj",
+      "projectUniqueName": "C:\\جامعة\\مشروع فصلي\\Development\\Sarab-Platform-develop\\Sarab-Platform.Tests\\Sarab-Platform.Tests.csproj",
       "projectName": "Sarab-Platform.Tests",
-      "projectPath": "c:\\Users\\User\\Desktop\\Sarab-Platform\\Sarab-Platform.Tests\\Sarab-Platform.Tests.csproj",
-      "packagesPath": "C:\\Users\\User\\.nuget\\packages\\",
-      "outputPath": "c:\\Users\\User\\Desktop\\Sarab-Platform\\Sarab-Platform.Tests\\obj\\",
+      "projectPath": "C:\\جامعة\\مشروع فصلي\\Development\\Sarab-Platform-develop\\Sarab-Platform.Tests\\Sarab-Platform.Tests.csproj",
+      "packagesPath": "C:\\Users\\ASUS\\.nuget\\packages\\",
+      "outputPath": "C:\\جامعة\\مشروع فصلي\\Development\\Sarab-Platform-develop\\Sarab-Platform.Tests\\obj\\",
       "projectStyle": "PackageReference",
-      "fallbackFolders": [
-        "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
-      ],
       "configFilePaths": [
-        "C:\\Users\\User\\AppData\\Roaming\\NuGet\\NuGet.Config",
-        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
-        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        "C:\\Users\\ASUS\\AppData\\Roaming\\NuGet\\NuGet.Config"
       ],
       "originalTargetFrameworks": [
         "net10.0"
       ],
       "sources": {
-        "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
         "https://api.nuget.org/v3/index.json": {}
       },
       "frameworks": {
         "net10.0": {
           "targetAlias": "net10.0",
           "projectReferences": {
-            "c:\\Users\\User\\Desktop\\Sarab-Platform\\backend\\Sarab-Platform.csproj": {
-              "projectPath": "c:\\Users\\User\\Desktop\\Sarab-Platform\\backend\\Sarab-Platform.csproj"
+            "C:\\جامعة\\مشروع فصلي\\Development\\Sarab-Platform-develop\\backend\\Sarab-Platform.csproj": {
+              "projectPath": "C:\\جامعة\\مشروع فصلي\\Development\\Sarab-Platform-develop\\backend\\Sarab-Platform.csproj"
             }
           }
         }
@@ -3455,7 +3448,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.202/PortableRuntimeIdentifierGraph.json",
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.203/PortableRuntimeIdentifierGraph.json",
         "packagesToPrune": {
           "Microsoft.CSharp": "(,4.7.32767]",
           "Microsoft.VisualBasic": "(,10.4.32767]",

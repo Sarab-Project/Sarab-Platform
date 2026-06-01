@@ -7,6 +7,7 @@ namespace SarabPlatform.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class TagsController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -17,7 +18,6 @@ namespace SarabPlatform.Controllers
         }
 
         [HttpGet]
-        [AllowAnonymous]
         public async Task<IActionResult> GetAvailableTags()
         {
             try

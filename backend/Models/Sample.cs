@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -27,66 +28,95 @@ namespace SarabPlatform.Models
         public DateTime DeletedAt { get; set; }
 
         [NotMapped]
-        public string? EyeSide => GetMetadataValueFromFirstFile("EyeSide");
+        public string? EyeSide => GetMetadataValue("EyeSide");
 
         [NotMapped]
-        public string? Gender => GetMetadataValueFromFirstFile("Gender");
+        public string? Gender => NormalizeGender(GetMetadataValue("Gender"));
 
         [NotMapped]
-        public int? Age => GetMetadataIntFromFirstFile("Age");
+        public int? Age => GetMetadataInt("Age");
 
         [NotMapped]
-        public string? City => GetMetadataValueFromFirstFile("City");
+        public string? City => GetMetadataValue("City");
 
         [NotMapped]
-        public string? Status => GetMetadataValueFromFirstFile("Status");
+        public string? Status => GetMetadataValue("Status");
 
         [NotMapped]
-        public string? Profession => GetMetadataValueFromFirstFile("Profession");
+        public string? Profession => GetMetadataValue("Profession");
 
         [NotMapped]
-        public string? Notes => GetMetadataValueFromFirstFile("Notes");
+        public string? Notes => GetMetadataValue("Notes");
 
-        private string? GetMetadataValueFromFirstFile(string key)
+        private string? GetMetadataValue(string key)
         {
-            var firstFile = Files?.FirstOrDefault();
-            if (firstFile == null)
+            if (string.IsNullOrWhiteSpace(key))
                 return null;
 
-            if (string.IsNullOrWhiteSpace(firstFile.Metadata))
-                return null;
-
-            try
+            if (!string.IsNullOrWhiteSpace(Metadata))
             {
-                var root = JsonNode.Parse(firstFile.Metadata);
-                if (root is not JsonObject obj)
-                    return null;
+                var metadataValue = TryGetMetadataValue(Metadata, key);
+                if (!string.IsNullOrWhiteSpace(metadataValue))
+                    return metadataValue;
+            }
 
-                if (!obj.TryGetPropertyValue(key, out var value) || value is null)
-                    return null;
-
-                if (value is JsonValue jsonValue)
+            if (Files != null)
+            {
+                foreach (var file in Files)
                 {
-                    var rawValue = jsonValue.GetValue<object?>();
-                    return rawValue?.ToString();
-                }
+                    if (string.IsNullOrWhiteSpace(file.Metadata))
+                        continue;
 
-                return value.ToJsonString();
+                    var metadataValue = TryGetMetadataValue(file.Metadata, key);
+                    if (!string.IsNullOrWhiteSpace(metadataValue))
+                        return metadataValue;
+                }
             }
-            catch
-            {
-                return null;
-            }
+
+            return null;
         }
 
-        public string? Metadata { get; set; }
-
-        private int? GetMetadataIntFromFirstFile(string key)
+        private int? GetMetadataInt(string key)
         {
-            var value = GetMetadataValueFromFirstFile(key);
+            var value = GetMetadataValue(key);
             if (int.TryParse(value, out var result))
                 return result;
             return null;
         }
+
+        private static string? TryGetMetadataValue(string json, string key)
+        {
+            try
+            {
+                var metadata = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
+                if (metadata != null && metadata.TryGetValue(key, out var value))
+                {
+                    return value?.ToString();
+                }
+            }
+            catch
+            {
+            }
+
+            return null;
+        }
+
+        private static string? NormalizeGender(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            var cleaned = value.Trim();
+            if (string.Equals(cleaned, "male", StringComparison.OrdinalIgnoreCase))
+                return "Male";
+            if (string.Equals(cleaned, "female", StringComparison.OrdinalIgnoreCase))
+                return "Female";
+            if (string.Equals(cleaned, "other", StringComparison.OrdinalIgnoreCase))
+                return "Other";
+
+            return CultureInfo.CurrentCulture.TextInfo.ToTitleCase(cleaned.ToLowerInvariant());
+        }
+
+        public string? Metadata { get; set; }
     }
 }

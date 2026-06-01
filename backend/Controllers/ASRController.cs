@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Net.Http.Headers;
 using SarabPlatform.Dto;
@@ -8,6 +9,7 @@ namespace SarabPlatform.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize(Policy = "ContributorOrAdmin")]
     public class ASRController : ControllerBase
     {
         private readonly IHttpClientFactory _httpClientFactory;

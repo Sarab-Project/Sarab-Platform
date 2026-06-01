@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SarabPlatform.Data;
@@ -9,6 +10,7 @@ namespace SarabPlatform.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize(Policy = "AdminOnly")]
     public class CollectionTemplatesController : ControllerBase
     {
         private readonly AppDbContext _context;

@@ -84,7 +84,6 @@ namespace SarabPlatform.Controllers
         }
 
         [HttpGet]
-        [AllowAnonymous]
         public IActionResult GetFolders()
         {
             var currentUserId = GetCurrentUserId();
@@ -108,7 +107,6 @@ namespace SarabPlatform.Controllers
         }
         
         [HttpGet("{id}")]
-        [AllowAnonymous]
         public IActionResult GetFolder(int id)
         {
             var currentUserId = GetCurrentUserId();
