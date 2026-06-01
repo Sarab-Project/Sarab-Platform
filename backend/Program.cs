@@ -11,9 +11,11 @@ using SarabPlatform.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Original setup
 builder.Services.AddControllers().AddJsonOptions(options =>
-    options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles);
+{
+    options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+    options.JsonSerializerOptions.WriteIndented = false;
+});
 
 builder.Services.AddScoped<FileService>();
 builder.Services.AddScoped<TokenService>();

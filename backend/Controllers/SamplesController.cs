@@ -51,6 +51,68 @@ namespace SarabPlatform.Controllers
                 .Include(s => s.Folder!).ThenInclude(f => f.Collection!);
         }
 
+        private static IQueryable<SampleResponseDto> ProjectSampleResponses(IQueryable<Sample> query)
+        {
+            return query.Select(s => new SampleResponseDto
+            {
+                Id = s.Id,
+                Title = s.Title,
+                Description = s.Description,
+                CreatedBy = s.CreatedBy,
+                CreatedByUser = s.CreatedByUser != null ? new UserPublicDto
+                {
+                    Id = s.CreatedByUser.Id,
+                    FirstName = s.CreatedByUser.FirstName,
+                    LastName = s.CreatedByUser.LastName,
+                    Email = s.CreatedByUser.Email,
+                    ProfileImagePath = s.CreatedByUser.ProfileImagePath,
+                    Role = (int)s.CreatedByUser.Role,
+                    CreatedAt = s.CreatedByUser.CreatedAt,
+                    IsActive = s.CreatedByUser.IsActive
+                } : null,
+                FolderId = s.FolderId,
+                Folder = s.Folder != null ? new FolderDto
+                {
+                    Id = s.Folder.Id,
+                    Name = s.Folder.Name
+                } : null,
+                DownloadCount = s.DownloadCount,
+                ViewCount = s.ViewCount,
+                Metadata = s.Metadata,
+                EyeSide = s.EyeSide,
+                Gender = s.Gender,
+                Age = s.Age,
+                City = s.City,
+                Status = s.Status,
+                Profession = s.Profession,
+                Notes = s.Notes,
+                CreatedAt = s.CreatedAt,
+                Files = s.Files.Where(f => !f.IsDeleted).Select(f => new ResourceFileDto
+                {
+                    Id = f.Id,
+                    FileName = f.FileName,
+                    FileType = (int)f.FileType,
+                    FilePath = f.FilePath,
+                    Size = f.Size,
+                    Metadata = f.Metadata,
+                    EyeSide = f.EyeSide,
+                    Gender = f.Gender,
+                    Age = f.Age,
+                    City = f.City,
+                    Status = f.Status,
+                    Profession = f.Profession,
+                    Notes = f.Notes,
+                    CreatedAt = f.CreatedAt,
+                    UploadedAt = f.UploadedAt
+                }).ToList(),
+                Tags = s.Tags.Select(t => new TagDto
+                {
+                    Id = t.Id,
+                    Name = t.Name
+                }).ToList()
+            });
+        }
+
         private int GetCurrentUserId()
         {
             var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue(JwtRegisteredClaimNames.Sub);
@@ -101,53 +163,69 @@ namespace SarabPlatform.Controllers
 
         [HttpGet]
         public async Task<IActionResult> GetSamples()
+{
+    try
+    {
+        var currentUserId = GetCurrentUserId();
+        var query = GetActiveSamplesQuery();
+
+        if (!IsAdminUser())
         {
-            var currentUserId = GetCurrentUserId();
-            var query = GetActiveSamplesQuery();
-
-            if (!IsAdminUser())
-            {
-                query = query.Where(s => s.Folder != null && s.Folder.Collection != null && (
-                    (s.Folder.Collection.OwnerType == OwnerType.User && s.Folder.Collection.Name != "Private Collection") ||
-                    (s.Folder.Collection.OwnerType == OwnerType.User && s.Folder.Collection.OwnerId == currentUserId) ||
-                    (s.Folder.Collection.OwnerType == OwnerType.Group && _context.GroupMembers.Any(gm => gm.GroupId == s.Folder.Collection.OwnerId && gm.UserId == currentUserId))
-                ));
-            }
-
-            var samples = await query.ToListAsync();
-            return Ok(samples);
+            query = query.Where(s => s.Folder != null && s.Folder.Collection != null && (
+                (s.Folder.Collection.OwnerType == OwnerType.User && s.Folder.Collection.Name != "Private Collection") ||
+                (s.Folder.Collection.OwnerType == OwnerType.User && s.Folder.Collection.OwnerId == currentUserId) ||
+                (s.Folder.Collection.OwnerType == OwnerType.Group && _context.GroupMembers.Any(gm => gm.GroupId == s.Folder.Collection.OwnerId && gm.UserId == currentUserId))
+            ));
         }
+        var samples = await ProjectSampleResponses(query)
+            .AsNoTracking()
+            .AsSplitQuery()
+            .ToListAsync();
+
+        return Ok(samples);
+    }
+    catch (Exception ex)
+    {
+        // Added exception safety wrapper matching your individual item endpoint
+        return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+    }
+}
 
         [HttpGet("{id}")]
         public async Task<IActionResult> GetSample(int id)
+{
+    try
+    {
+        var currentUserId = GetCurrentUserId();
+        var query = GetActiveSamplesQuery().Where(s => s.Id == id);
+
+        if (!IsAdminUser())
         {
-            try
-            {
-                var currentUserId = GetCurrentUserId();
-                var query = GetActiveSamplesQuery().Where(s => s.Id == id);
-                if (!IsAdminUser())
-                {
-                    query = query.Where(s => s.Folder != null && s.Folder.Collection != null && (
-                        (s.Folder.Collection.OwnerType == OwnerType.User && s.Folder.Collection.Name != "Private Collection") ||
-                        (s.Folder.Collection.OwnerType == OwnerType.User && s.Folder.Collection.OwnerId == currentUserId) ||
-                        (s.Folder.Collection.OwnerType == OwnerType.Group && _context.GroupMembers.Any(gm => gm.GroupId == s.Folder.Collection.OwnerId && gm.UserId == currentUserId))
-                    ));
-                }
-
-                var sample = await query.FirstOrDefaultAsync();
-                if (sample == null)
-                    return NotFound();
-
-                sample.ViewCount++;
-                await _context.SaveChangesAsync();
-
-                return Ok(sample);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = "Internal server error", error = ex.Message });
-            }
+            query = query.Where(s => s.Folder != null && s.Folder.Collection != null && (
+                (s.Folder.Collection.OwnerType == OwnerType.User && s.Folder.Collection.Name != "Private Collection") ||
+                (s.Folder.Collection.OwnerType == OwnerType.User && s.Folder.Collection.OwnerId == currentUserId) ||
+                (s.Folder.Collection.OwnerType == OwnerType.Group && _context.GroupMembers.Any(gm => gm.GroupId == s.Folder.Collection.OwnerId && gm.UserId == currentUserId))
+            ));
         }
+
+        var sample = await ProjectSampleResponses(query)
+            .AsSplitQuery() 
+            .FirstOrDefaultAsync();
+
+        if (sample == null)
+            return NotFound();
+
+        await _context.Samples
+            .Where(s => s.Id == id)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(s => s.ViewCount, s => s.ViewCount + 1));
+
+        return Ok(sample);
+    }
+    catch (Exception ex)
+    {
+        return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+    }
+}
 
         [HttpPost("search")]
         public async Task<IActionResult> SearchSamples([FromBody] SearchSampleDto dto)

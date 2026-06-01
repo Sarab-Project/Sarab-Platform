@@ -9,5 +9,8 @@ namespace SarabPlatform.Dto
         public string? LastName { get; set; }
         public string? Email { get; set; }
         public string? ProfileImagePath { get; set; }
+        public int Role { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public bool IsActive { get; set; }
     }
 }

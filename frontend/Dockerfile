@@ -37,8 +37,9 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 RUN addgroup -g 101 -S nginx && adduser -S -D -H -u 101 -h /var/cache/nginx -s /sbin/nologin -G nginx -g nginx nginx || true
 
 # Change permissions
-RUN mkdir -p /var/run && \
+RUN mkdir -p /var/run /var/lib/nginx /var/cache/nginx && \
     chown -R nginx:nginx /usr/share/nginx/html && \
+    chown -R nginx:nginx /var/lib/nginx && \
     chown -R nginx:nginx /var/cache/nginx && \
     chown -R nginx:nginx /var/log/nginx && \
     chown -R nginx:nginx /etc/nginx/conf.d && \
