@@ -147,7 +147,7 @@ export function SampleDetail() {
   };
 
   const canManageSample = Boolean(
-    user && (user.role === 'Admin' || (user.role === 'Contributor' && sample?.createdBy === user.id))
+    user && (user.role === 0 || sample?.createdBy === user.id)
   );
 
   useEffect(() => {
