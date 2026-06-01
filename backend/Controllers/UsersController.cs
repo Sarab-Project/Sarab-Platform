@@ -17,9 +17,15 @@ namespace SarabPlatform.Controllers
  public class UsersController : ControllerBase
     {
         private readonly AppDbContext _context;
-        public UsersController(AppDbContext context)
+        private readonly string _uploadsRoot;
+        public UsersController(AppDbContext context, IConfiguration config, IWebHostEnvironment env)
         {
             _context = context;
+            var configured = config["Uploads:Path"] ?? config["UPLOADS_PATH"];
+            _uploadsRoot = !string.IsNullOrWhiteSpace(configured)
+                ? (Path.IsPathRooted(configured) ? configured : Path.Combine(env.ContentRootPath, configured))
+                : Path.Combine(env.ContentRootPath, "Uploads");
+            try { Directory.CreateDirectory(_uploadsRoot); } catch { }
         }
 
         [HttpGet]
@@ -221,13 +227,7 @@ namespace SarabPlatform.Controllers
             if (dto?.File == null || dto.File.Length == 0)
                 return BadRequest(new { message = "A valid file is required" });
 
-            var uploadPath = Path.Combine(
-                Directory.GetCurrentDirectory(),
-                "Uploads",
-                $"user-{id}",
-                "folder-Documents"
-            );
-
+            var uploadPath = Path.Combine(_uploadsRoot, $"user-{id}", "folder-Documents");
             Directory.CreateDirectory(uploadPath);
 
             try
@@ -243,7 +243,7 @@ namespace SarabPlatform.Controllers
                 var userDocument = new UserDocument
                 {
                     UserId = id,
-                    Path = filePath,
+                    Path = Path.GetRelativePath(_uploadsRoot, filePath),
                     Status = DocumentStatus.Pending,
                     UploadedAt = DateTime.UtcNow
                 };

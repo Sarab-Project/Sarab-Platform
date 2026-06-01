@@ -25,12 +25,20 @@ namespace SarabPlatform.Controllers
         private readonly AppDbContext _context;
         private readonly FileService _fileService;
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly string _uploadsRoot;
 
-        public SamplesController(AppDbContext context, FileService fileService, IHttpClientFactory httpClientFactory)
+        public SamplesController(AppDbContext context, FileService fileService, IHttpClientFactory httpClientFactory, IConfiguration config, IWebHostEnvironment env)
         {
             _context = context;
             _fileService = fileService;
             _httpClientFactory = httpClientFactory;
+
+            var configured = config["Uploads:Path"] ?? config["UPLOADS_PATH"];
+            _uploadsRoot = !string.IsNullOrWhiteSpace(configured)
+                ? (Path.IsPathRooted(configured) ? configured : Path.Combine(env.ContentRootPath, configured))
+                : Path.Combine(env.ContentRootPath, "Uploads");
+
+            try { Directory.CreateDirectory(_uploadsRoot); } catch { }
         }
 
         private IQueryable<Sample> GetActiveSamplesQuery()
@@ -88,11 +96,7 @@ namespace SarabPlatform.Controllers
 
         private string GetSampleMetadata(Sample sample)
         {
-            if (!string.IsNullOrWhiteSpace(sample.Metadata))
-                return sample.Metadata!;
-
-            var firstFileMetadata = sample.Files?.FirstOrDefault()?.Metadata;
-            return string.IsNullOrWhiteSpace(firstFileMetadata) ? string.Empty : firstFileMetadata!;
+            return string.IsNullOrWhiteSpace(sample.Metadata) ? string.Empty : sample.Metadata!;
         }
 
         [HttpGet]
@@ -418,7 +422,11 @@ namespace SarabPlatform.Controllers
             if (file == null)
                 return NotFound("File not found");
 
-            if (string.IsNullOrWhiteSpace(file.FilePath) || !System.IO.File.Exists(file.FilePath))
+            if (string.IsNullOrWhiteSpace(file.FilePath))
+                return NotFound("File content not found");
+
+            var physicalPath = Path.IsPathRooted(file.FilePath) ? file.FilePath : Path.Combine(_uploadsRoot, file.FilePath);
+            if (!System.IO.File.Exists(physicalPath))
                 return NotFound("File content not found");
 
             var contentTypeProvider = new FileExtensionContentTypeProvider();
@@ -426,7 +434,7 @@ namespace SarabPlatform.Controllers
                 ? resolvedType
                 : "application/octet-stream";
 
-            var stream = new FileStream(file.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            var stream = new FileStream(physicalPath, FileMode.Open, FileAccess.Read, FileShare.Read);
             return File(stream, contentType);
         }
 
@@ -459,7 +467,7 @@ namespace SarabPlatform.Controllers
             _context.Samples.Add(sample);
             await _context.SaveChangesAsync();
 
-            var uploadPath = Path.Combine(Directory.GetCurrentDirectory(), "Uploads", $"sample-{sample.Id}");
+            var uploadPath = Path.Combine(_uploadsRoot, $"sample-{sample.Id}");
             if (!Directory.Exists(uploadPath)) Directory.CreateDirectory(uploadPath);
 
             var streamsToDispose = new List<Stream>();
@@ -491,7 +499,7 @@ namespace SarabPlatform.Controllers
                     _context.Files.Add(new ResourceFile
                     {
                         FileName = targetFileName,
-                        FilePath = filePath,
+                        FilePath = Path.GetRelativePath(_uploadsRoot, filePath),
                         SampleId = sample.Id,
                         FileType = FileType.Video
                     });
@@ -594,7 +602,7 @@ namespace SarabPlatform.Controllers
                 _context.Files.Add(new ResourceFile
                 {
                     FileName = fileNameNoExt + ".mp4",
-                    FilePath = mp4Path,
+                    FilePath = Path.GetRelativePath(_uploadsRoot, mp4Path),
                     SampleId = sampleId,
                     FileType = FileType.Video
                 });
@@ -627,7 +635,7 @@ namespace SarabPlatform.Controllers
                 _context.Files.Add(new ResourceFile
                 {
                     FileName = fileName,
-                    FilePath = filePath,
+                    FilePath = Path.GetRelativePath(_uploadsRoot, filePath),
                     SampleId = sampleId,
                     FileType = fileName.EndsWith(".png") ? FileType.Image : FileType.Video
                 });
@@ -694,14 +702,7 @@ namespace SarabPlatform.Controllers
             _context.Samples.Add(sample);
             await _context.SaveChangesAsync();
 
-            var uploadPath = Path.Combine(
-                Directory.GetCurrentDirectory(),
-                "Uploads",
-                $"user-{folder.CreatedBy}",
-                $"folder-{folder.Name}",
-                $"sample-{sample.Title}"
-            );
-
+            var uploadPath = Path.Combine(_uploadsRoot, $"user-{folder.CreatedBy}", $"folder-{folder.Name}", $"sample-{sample.Title}");
             Directory.CreateDirectory(uploadPath);
 
             for (var fileIndex = 0; fileIndex < dto.Files.Count; fileIndex++)
@@ -747,7 +748,7 @@ namespace SarabPlatform.Controllers
                     var resourceFile = new ResourceFile
                     {
                         FileName = Path.GetFileName(result.path),
-                        FilePath = result.path,
+                        FilePath = Path.GetRelativePath(_uploadsRoot, result.path),
                         FileType = result.type,
                         SampleId = sample.Id,
                         Size = (int)file.Length,
@@ -869,9 +870,13 @@ namespace SarabPlatform.Controllers
                     file.IsDeleted = true;
                     file.DeletedAt = DateTime.UtcNow;
 
-                    if (!string.IsNullOrWhiteSpace(file.FilePath) && System.IO.File.Exists(file.FilePath))
+                    if (!string.IsNullOrWhiteSpace(file.FilePath))
                     {
-                        System.IO.File.Delete(file.FilePath);
+                        var physical = Path.IsPathRooted(file.FilePath) ? file.FilePath : Path.Combine(_uploadsRoot, file.FilePath);
+                        if (System.IO.File.Exists(physical))
+                        {
+                            try { System.IO.File.Delete(physical); } catch { }
+                        }
                     }
                 }
             }
@@ -880,13 +885,7 @@ namespace SarabPlatform.Controllers
             if (dto.NewFiles != null && dto.NewFiles.Any())
             {
                 var folderSegment = folder != null ? $"folder-{folder.Name}" : "folder-unassigned";
-                var uploadPath = Path.Combine(
-                    Directory.GetCurrentDirectory(),
-                    "Uploads",
-                    folderSegment,
-                    $"sample-{sample.Title}"
-                );
-
+                var uploadPath = Path.Combine(_uploadsRoot, folderSegment, $"sample-{sample.Title}");
                 Directory.CreateDirectory(uploadPath);
 
                 foreach (var file in dto.NewFiles)
@@ -897,7 +896,7 @@ namespace SarabPlatform.Controllers
                         var resourceFile = new ResourceFile
                         {
                             FileName = Path.GetFileName(result.path),
-                            FilePath = result.path,
+                            FilePath = Path.GetRelativePath(_uploadsRoot, result.path),
                             FileType = result.type,
                             SampleId = sample.Id,
                             Size = (int)file.Length,
@@ -1001,15 +1000,15 @@ namespace SarabPlatform.Controllers
             {
                 foreach (var file in files)
                 {
-                    if(!System.IO.File.Exists(file.FilePath))
+                    var physicalPath = Path.IsPathRooted(file.FilePath) ? file.FilePath : Path.Combine(_uploadsRoot, file.FilePath);
+                    if(!System.IO.File.Exists(physicalPath))
                         continue;
                     var entry = archive.CreateEntry(file.FileName);
-
-                    using var entryStream = entry.Open();    
-                    using FileStream fileStream = new FileStream(file.FilePath, FileMode.Open, FileAccess.Read);
-                    
-                    await fileStream.CopyToAsync(entryStream);
-                    
+                    using (var entryStream = entry.Open())
+                    using (FileStream fileStream = new FileStream(physicalPath, FileMode.Open, FileAccess.Read))
+                    {
+                        await fileStream.CopyToAsync(entryStream);
+                    }
                 }
             }
 
@@ -1050,22 +1049,38 @@ namespace SarabPlatform.Controllers
                 {
                     var sampleFolder = $"sample-{sample.Id}";
                     var metadataText = GetSampleMetadata(sample);
-                    var metadataEntry = archive.CreateEntry($"{sampleFolder}/metadata.txt");
-                    using (var entryStream = metadataEntry.Open())
-                    using (var streamWriter = new StreamWriter(entryStream))
+                    if (!string.IsNullOrWhiteSpace(metadataText))
                     {
-                        streamWriter.Write(metadataText);
+                        var metadataEntry = archive.CreateEntry($"{sampleFolder}/metadata.txt");
+                        using (var entryStream = metadataEntry.Open())
+                        using (var streamWriter = new StreamWriter(entryStream))
+                        {
+                            streamWriter.Write(metadataText);
+                        }
                     }
 
                     foreach (var file in sample.Files ?? new List<ResourceFile>())
                     {
-                        if (!System.IO.File.Exists(file.FilePath))
+                        var physicalPath = Path.IsPathRooted(file.FilePath) ? file.FilePath : Path.Combine(_uploadsRoot, file.FilePath);
+                        if (!System.IO.File.Exists(physicalPath))
                             continue;
 
                         var entry = archive.CreateEntry($"{sampleFolder}/{file.FileName}");
-                        using var entryStream = entry.Open();
-                        using FileStream fileStream = new FileStream(file.FilePath, FileMode.Open, FileAccess.Read);
-                        await fileStream.CopyToAsync(entryStream);
+                        using (var entryStream = entry.Open())
+                        using (FileStream fileStream = new FileStream(physicalPath, FileMode.Open, FileAccess.Read))
+                        {
+                            await fileStream.CopyToAsync(entryStream);
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(file.Metadata))
+                        {
+                            var metaEntry = archive.CreateEntry($"{sampleFolder}/{file.FileName}.metadata.json");
+                            using (var mStream = metaEntry.Open())
+                            using (var writer = new StreamWriter(mStream))
+                            {
+                                writer.Write(file.Metadata);
+                            }
+                        }
                     }
                 }
             }
@@ -1110,22 +1125,38 @@ namespace SarabPlatform.Controllers
             using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, true))
             {
                 var metadataText = GetSampleMetadata(sample);
-                var metadataEntry = archive.CreateEntry("metadata.txt");
-                using (var entryStream = metadataEntry.Open())
-                using (var streamWriter = new StreamWriter(entryStream))
+                if (!string.IsNullOrWhiteSpace(metadataText))
                 {
-                    streamWriter.Write(metadataText);
+                    var metadataEntry = archive.CreateEntry("metadata.txt");
+                    using (var entryStream = metadataEntry.Open())
+                    using (var streamWriter = new StreamWriter(entryStream))
+                    {
+                        streamWriter.Write(metadataText);
+                    }
                 }
 
                 foreach (var file in sample.Files ?? new List<ResourceFile>())
                 {
-                    if (!System.IO.File.Exists(file.FilePath))
+                    var physicalPath = Path.IsPathRooted(file.FilePath) ? file.FilePath : Path.Combine(_uploadsRoot, file.FilePath);
+                    if (!System.IO.File.Exists(physicalPath))
                         continue;
 
                     var entry = archive.CreateEntry(file.FileName);
-                    using var entryStream = entry.Open();
-                    using FileStream fileStream = new FileStream(file.FilePath, FileMode.Open, FileAccess.Read);
-                    await fileStream.CopyToAsync(entryStream);
+                    using (var entryStream = entry.Open())
+                    using (FileStream fileStream = new FileStream(physicalPath, FileMode.Open, FileAccess.Read))
+                    {
+                        await fileStream.CopyToAsync(entryStream);
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(file.Metadata))
+                    {
+                        var metaEntry = archive.CreateEntry($"{file.FileName}.metadata.json");
+                        using (var mStream = metaEntry.Open())
+                        using (var writer = new StreamWriter(mStream))
+                        {
+                            writer.Write(file.Metadata);
+                        }
+                    }
                 }
             }
 
