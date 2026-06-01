@@ -63,7 +63,7 @@ export function Groups() {
       const data = await fetchGroups();
       setGroups(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load groups');
+      setError(getErrorMessage(err, 'Failed to load groups'));
     } finally {
       setLoading(false);
     }
@@ -87,7 +87,7 @@ export function Groups() {
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load group details');
+      setError(getErrorMessage(err, 'Failed to load group details'));
     } finally {
       setDetailLoading(false);
     }
@@ -113,7 +113,7 @@ export function Groups() {
       setNewGroupName('');
       setNewGroupDesc('');
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : 'Failed to create group');
+      setCreateError(getErrorMessage(err, 'Failed to create group'));
     } finally {
       setCreateLoading(false);
     }
@@ -130,7 +130,7 @@ export function Groups() {
       const updated = await fetchGroupById(selectedGroup.id);
       setSelectedGroup(updated);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to remove member');
+      alert(getErrorMessage(err, 'Failed to remove member'));
     } finally {
       setRemovingMemberId(null);
     }
@@ -154,7 +154,7 @@ export function Groups() {
       setSelectedGroup(updated);
       setInviteEmail('');
     } catch (err) {
-      setInviteError(err instanceof Error ? err.message : 'Failed to invite user');
+      setInviteError(getErrorMessage(err, 'Failed to invite user'));
     } finally {
       setInviteLoading(false);
     }
@@ -169,7 +169,7 @@ export function Groups() {
       setSelectedGroup(null);
       await loadGroups();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to leave group');
+      alert(getErrorMessage(err, 'Failed to leave group'));
     } finally {
       setLeaving(false);
     }
@@ -184,7 +184,7 @@ export function Groups() {
       setSelectedGroup(null);
       await loadGroups();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete group');
+      alert(getErrorMessage(err, 'Failed to delete group'));
     } finally {
       setDeleting(false);
     }

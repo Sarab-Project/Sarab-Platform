@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
+import { extractResponseErrorMessage, safeFetch } from '../services/error';
 
 const API_BASE_URL = 'http://localhost:5027/api';
 
@@ -96,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const refreshToken = localStorage.getItem('sarab_refresh_token');
     if (!refreshToken) return false;
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      const res = await safeFetch(`${API_BASE_URL}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
@@ -140,14 +141,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [doRefresh]);
 
   const login = async (email: string, password: string) => {
-    const res = await fetch(`${API_BASE_URL}/auth/login`, {
+    const res = await safeFetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Login failed');
+      const err = await extractResponseErrorMessage(res);
+      throw new Error(err || 'Login failed');
     }
     const data = await res.json();
     const loggedInUser = extractUserFromToken(data.token, {
@@ -165,14 +166,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signup = async (firstName: string, lastName: string, email: string, password: string, role: UserRole) => {
-    const res = await fetch(`${API_BASE_URL}/auth/signup`, {
+    const res = await safeFetch(`${API_BASE_URL}/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ firstName, lastName, email, password, role }),
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || Object.values(err.errors || {}).flat().join(', ') || 'Signup failed');
+      const err = await extractResponseErrorMessage(res);
+      throw new Error(err || 'Signup failed');
     }
     const data = await res.json();
     const newUser = extractUserFromToken(data.token, {
@@ -193,7 +194,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const refreshToken = localStorage.getItem('sarab_refresh_token');
     try {
       if (memoryAccessToken && refreshToken) {
-        await fetch(`${API_BASE_URL}/auth/logout`, {
+        await safeFetch(`${API_BASE_URL}/auth/logout`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

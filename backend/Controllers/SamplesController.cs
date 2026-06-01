@@ -176,16 +176,19 @@ namespace SarabPlatform.Controllers
                         s.Files.Any(f => f.FileType.ToString().Equals(fileType, StringComparison.OrdinalIgnoreCase))));
                 }
 
-                if (!string.IsNullOrWhiteSpace(dto.ContributorName))
+                if (!string.IsNullOrWhiteSpace(dto.Title))
                 {
-                    filtered = filtered.Where(s => s.CreatedByUser != null &&
-                        (s.CreatedByUser.FirstName + " " + s.CreatedByUser.LastName)
-                            .Contains(dto.ContributorName, StringComparison.OrdinalIgnoreCase));
+                    filtered = filtered.Where(s => !string.IsNullOrWhiteSpace(s.Title) && s.Title.Contains(dto.Title, StringComparison.OrdinalIgnoreCase));
                 }
 
-                if (!string.IsNullOrWhiteSpace(dto.MetadataKey) && !string.IsNullOrWhiteSpace(dto.MetadataValue))
+                if (!string.IsNullOrWhiteSpace(dto.Description))
                 {
-                    filtered = filtered.Where(s => GetMetadataValue(s, dto.MetadataKey)?.Contains(dto.MetadataValue, StringComparison.OrdinalIgnoreCase) == true);
+                    filtered = filtered.Where(s => !string.IsNullOrWhiteSpace(s.Description) && s.Description.Contains(dto.Description, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (!string.IsNullOrWhiteSpace(dto.EyeSide))
+                {
+                    filtered = filtered.Where(s => string.Equals(GetMetadataValue(s, "EyeSide"), dto.EyeSide, StringComparison.OrdinalIgnoreCase));
                 }
 
                 if (!string.IsNullOrWhiteSpace(dto.Gender))
@@ -198,9 +201,37 @@ namespace SarabPlatform.Controllers
                     filtered = filtered.Where(s => GetMetadataValue(s, "City")?.Contains(dto.City, StringComparison.OrdinalIgnoreCase) == true);
                 }
 
+                if (!string.IsNullOrWhiteSpace(dto.Condition))
+                {
+                    filtered = filtered.Where(s => GetMetadataValue(s, "Status")?.Contains(dto.Condition, StringComparison.OrdinalIgnoreCase) == true ||
+                        (!string.IsNullOrWhiteSpace(s.Status) && s.Status.Contains(dto.Condition, StringComparison.OrdinalIgnoreCase)));
+                }
+
                 if (!string.IsNullOrWhiteSpace(dto.Status))
                 {
                     filtered = filtered.Where(s => GetMetadataValue(s, "Status")?.Contains(dto.Status, StringComparison.OrdinalIgnoreCase) == true);
+                }
+
+                if (!string.IsNullOrWhiteSpace(dto.Profession))
+                {
+                    filtered = filtered.Where(s => GetMetadataValue(s, "Profession")?.Contains(dto.Profession, StringComparison.OrdinalIgnoreCase) == true);
+                }
+
+                if (!string.IsNullOrWhiteSpace(dto.Notes))
+                {
+                    filtered = filtered.Where(s => GetMetadataValue(s, "Notes")?.Contains(dto.Notes, StringComparison.OrdinalIgnoreCase) == true);
+                }
+
+                if (!string.IsNullOrWhiteSpace(dto.ContributorName))
+                {
+                    filtered = filtered.Where(s => s.CreatedByUser != null &&
+                        (s.CreatedByUser.FirstName + " " + s.CreatedByUser.LastName)
+                            .Contains(dto.ContributorName, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (!string.IsNullOrWhiteSpace(dto.MetadataKey) && !string.IsNullOrWhiteSpace(dto.MetadataValue))
+                {
+                    filtered = filtered.Where(s => GetMetadataValue(s, dto.MetadataKey)?.Contains(dto.MetadataValue, StringComparison.OrdinalIgnoreCase) == true);
                 }
 
                 if (dto.MinAge.HasValue)
@@ -276,10 +307,17 @@ namespace SarabPlatform.Controllers
         {
             try
             {
-                var metadata = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
-                if (metadata != null && metadata.TryGetValue(key, out var value))
+                var metadata = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json);
+                if (metadata == null)
+                    return null;
+
+                if (metadata.TryGetValue(key, out var value))
+                    return ConvertJsonElementToString(value);
+
+                foreach (var kvp in metadata)
                 {
-                    return value?.ToString();
+                    if (string.Equals(kvp.Key, key, StringComparison.OrdinalIgnoreCase))
+                        return ConvertJsonElementToString(kvp.Value);
                 }
             }
             catch
@@ -287,6 +325,18 @@ namespace SarabPlatform.Controllers
             }
 
             return null;
+        }
+
+        private static string? ConvertJsonElementToString(JsonElement element)
+        {
+            return element.ValueKind switch
+            {
+                JsonValueKind.String => element.GetString(),
+                JsonValueKind.Number => element.ToString(),
+                JsonValueKind.True => "True",
+                JsonValueKind.False => "False",
+                _ => element.ToString()
+            };
         }
 
         private static bool SampleMatchesTerm(Sample sample, string rawTerm)
@@ -666,7 +716,31 @@ namespace SarabPlatform.Controllers
                         var metadataEntry = fileMetadataList[fileIndex];
                         if (metadataEntry.Any())
                         {
-                            fileMetadataJson = JsonSerializer.Serialize(metadataEntry);
+                            var normalizedMetadata = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+                            foreach (var kvp in metadataEntry)
+                            {
+                                if (kvp.Value == null)
+                                    continue;
+
+                                var normalizedKey = kvp.Key switch
+                                {
+                                    "eyeSide" => "EyeSide",
+                                    "gender" => "Gender",
+                                    "age" => "Age",
+                                    "city" => "City",
+                                    "status" => "Status",
+                                    "profession" => "Profession",
+                                    "notes" => "Notes",
+                                    _ => kvp.Key
+                                };
+
+                                normalizedMetadata[normalizedKey] = kvp.Value;
+                            }
+
+                            if (normalizedMetadata.Any())
+                            {
+                                fileMetadataJson = JsonSerializer.Serialize(normalizedMetadata);
+                            }
                         }
                     }
 

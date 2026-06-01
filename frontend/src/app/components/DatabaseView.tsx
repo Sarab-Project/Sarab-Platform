@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import {
-  Folder, Layers, LayoutGrid, Plus, UploadCloud, Search, Filter,
-  ChevronRight, ChevronUp, ChevronDown, File, ArrowLeft, AlertCircle, Download, Loader, X,
+  Folder, Layers, LayoutGrid, Plus, UploadCloud, Search,
+  ChevronRight, File, ArrowLeft, AlertCircle, Download, Loader, X,
   RefreshCw
 } from 'lucide-react';
 import {
@@ -12,6 +12,7 @@ import {
   type Sample as ApiSample, type Collection, type Folder as ApiFolder,
   type Tag, type SearchSampleDto, type Group
 } from '../services/api';
+import { getErrorMessage } from '../services/error';
 import { useAuth } from '../contexts/AuthContext';
 
 type TabType = 'flat' | 'collections' | 'my-collection';
@@ -19,16 +20,20 @@ type TabType = 'flat' | 'collections' | 'my-collection';
 export function DatabaseView() {
   const [activeTab, setActiveTab] = useState<TabType>('flat');
   const [searchQuery, setSearchQuery] = useState('');
-  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState({
-    fileTypes: [] as string[],
-    contributorName: '',
-    metadataKey: '',
-    metadataValue: '',
+    title: '',
+    description: '',
     selectedTagIds: [] as number[],
+    eyeSide: '',
+    gender: '',
+    minAge: '',
+    maxAge: '',
+    city: '',
+    condition: '',
+    profession: '',
+    notes: '',
   });
-  const [filterGender, setFilterGender] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
+  const [showTagDropdown, setShowTagDropdown] = useState(false);
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   const canManageContent = user?.role === 'Admin' || user?.role === 'Contributor';
@@ -98,7 +103,7 @@ export function DatabaseView() {
         fetchTags(),
       ]);
       if (s.status === 'fulfilled') setSamples(s.value);
-      else if (s.status === 'rejected') setError(s.reason?.message || 'Failed to fetch samples');
+      else if (s.status === 'rejected') setError(getErrorMessage(s.reason, 'Failed to load samples'));
       if (c.status === 'fulfilled') setCollections(c.value);
       if (f.status === 'fulfilled') setFolders(f.value);
       if (t.status === 'fulfilled') setTags(t.value);
@@ -113,8 +118,18 @@ export function DatabaseView() {
     if (searchTimeout) clearTimeout(searchTimeout);
 
     const trimmed = query.trim();
-    if (trimmed.length === 0 && !advancedFilters.fileTypes.length && !advancedFilters.contributorName &&
-        !advancedFilters.metadataKey && !advancedFilters.metadataValue) {
+    if (trimmed.length === 0 &&
+        !advancedFilters.title &&
+        !advancedFilters.description &&
+        !advancedFilters.selectedTagIds.length &&
+        !advancedFilters.eyeSide &&
+        !advancedFilters.gender &&
+        !advancedFilters.minAge &&
+        !advancedFilters.maxAge &&
+        !advancedFilters.city &&
+        !advancedFilters.condition &&
+        !advancedFilters.profession &&
+        !advancedFilters.notes) {
       setShowSuggestions(false);
       setSuggestions([]);
       setIsSearching(true);
@@ -150,10 +165,16 @@ export function DatabaseView() {
       try {
         const searchDto: SearchSampleDto = {
           keyword: trimmed || undefined,
-          fileTypes: advancedFilters.fileTypes.length > 0 ? advancedFilters.fileTypes : undefined,
-          contributorName: advancedFilters.contributorName || undefined,
-          metadataKey: advancedFilters.metadataKey || undefined,
-          metadataValue: advancedFilters.metadataValue || undefined,
+          title: advancedFilters.title || undefined,
+          description: advancedFilters.description || undefined,
+          eyeSide: advancedFilters.eyeSide || undefined,
+          gender: advancedFilters.gender || undefined,
+          minAge: advancedFilters.minAge ? Number(advancedFilters.minAge) : undefined,
+          maxAge: advancedFilters.maxAge ? Number(advancedFilters.maxAge) : undefined,
+          city: advancedFilters.city || undefined,
+          condition: advancedFilters.condition || undefined,
+          profession: advancedFilters.profession || undefined,
+          notes: advancedFilters.notes || undefined,
           tagIds: advancedFilters.selectedTagIds.length > 0 ? advancedFilters.selectedTagIds : undefined,
           pageSize: 50,
         };
@@ -171,12 +192,19 @@ export function DatabaseView() {
   const handleClearSearch = async () => {
     setSearchQuery('');
     setAdvancedFilters({
-      fileTypes: [],
-      contributorName: '',
-      metadataKey: '',
-      metadataValue: '',
+      title: '',
+      description: '',
       selectedTagIds: [],
+      eyeSide: '',
+      gender: '',
+      minAge: '',
+      maxAge: '',
+      city: '',
+      condition: '',
+      profession: '',
+      notes: '',
     });
+    setShowTagDropdown(false);
     setShowSuggestions(false);
     setSuggestions([]);
     setIsSearching(true);
@@ -201,10 +229,16 @@ export function DatabaseView() {
       try {
         const searchDto: SearchSampleDto = {
           keyword: searchQuery.trim() || undefined,
-          fileTypes: newFilters.fileTypes.length > 0 ? newFilters.fileTypes : undefined,
-          contributorName: newFilters.contributorName || undefined,
-          metadataKey: newFilters.metadataKey || undefined,
-          metadataValue: newFilters.metadataValue || undefined,
+          title: newFilters.title || undefined,
+          description: newFilters.description || undefined,
+          eyeSide: newFilters.eyeSide || undefined,
+          gender: newFilters.gender || undefined,
+          minAge: newFilters.minAge ? Number(newFilters.minAge) : undefined,
+          maxAge: newFilters.maxAge ? Number(newFilters.maxAge) : undefined,
+          city: newFilters.city || undefined,
+          condition: newFilters.condition || undefined,
+          profession: newFilters.profession || undefined,
+          notes: newFilters.notes || undefined,
           tagIds: newFilters.selectedTagIds.length > 0 ? newFilters.selectedTagIds : undefined,
           pageSize: 50,
         };
@@ -222,17 +256,32 @@ export function DatabaseView() {
   // Local filter on top of API search
   const filteredSamples = useMemo(() => {
     return samples.filter(s => {
+      const lowerQuery = searchQuery.toLowerCase();
       const matchesSearch = !searchQuery ||
-        s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (s.status || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (s.city || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (s.gender || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (s.tags || []).some(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()));
-      const matchesGender = !filterGender || s.gender === filterGender;
-      const matchesStatus = !filterStatus || (s.status || '').toLowerCase().includes(filterStatus.toLowerCase());
-      return matchesSearch && matchesGender && matchesStatus;
+        s.title.toLowerCase().includes(lowerQuery) ||
+        (s.description || '').toLowerCase().includes(lowerQuery) ||
+        (s.status || '').toLowerCase().includes(lowerQuery) ||
+        (s.city || '').toLowerCase().includes(lowerQuery) ||
+        (s.gender || '').toLowerCase().includes(lowerQuery) ||
+        (s.profession || '').toLowerCase().includes(lowerQuery) ||
+        (s.notes || '').toLowerCase().includes(lowerQuery) ||
+        (s.tags || []).some(t => t.name.toLowerCase().includes(lowerQuery));
+
+      const matchesTitle = !advancedFilters.title || s.title.toLowerCase().includes(advancedFilters.title.toLowerCase());
+      const matchesDescription = !advancedFilters.description || (s.description || '').toLowerCase().includes(advancedFilters.description.toLowerCase());
+      const matchesEyeSide = !advancedFilters.eyeSide || (s.eyeSide || '').toLowerCase() === advancedFilters.eyeSide.toLowerCase();
+      const matchesGender = !advancedFilters.gender || (s.gender || '').toLowerCase() === advancedFilters.gender.toLowerCase();
+      const matchesAgeMin = !advancedFilters.minAge || (s.age !== null && s.age !== undefined && s.age >= Number(advancedFilters.minAge));
+      const matchesAgeMax = !advancedFilters.maxAge || (s.age !== null && s.age !== undefined && s.age <= Number(advancedFilters.maxAge));
+      const matchesCity = !advancedFilters.city || (s.city || '').toLowerCase().includes(advancedFilters.city.toLowerCase());
+      const matchesCondition = !advancedFilters.condition || (s.status || '').toLowerCase().includes(advancedFilters.condition.toLowerCase());
+      const matchesProfession = !advancedFilters.profession || (s.profession || '').toLowerCase().includes(advancedFilters.profession.toLowerCase());
+      const matchesNotes = !advancedFilters.notes || (s.notes || '').toLowerCase().includes(advancedFilters.notes.toLowerCase());
+      const matchesTags = !advancedFilters.selectedTagIds.length || (s.tags || []).some(t => advancedFilters.selectedTagIds.includes(t.id));
+
+      return matchesSearch && matchesTitle && matchesDescription && matchesEyeSide && matchesGender && matchesAgeMin && matchesAgeMax && matchesCity && matchesCondition && matchesProfession && matchesNotes && matchesTags;
     });
-  }, [samples, searchQuery, filterGender, filterStatus]);
+  }, [samples, searchQuery, advancedFilters]);
 
   // Folder breadcrumbs
   const currentFolderObj = folders.find(f => f.id === currentFolderId);
@@ -328,7 +377,7 @@ export function DatabaseView() {
       setNewCollDesc('');
         setNewCollAllowedGroupIds([]);
     } catch (err) {
-      setCreateCollError(err instanceof Error ? err.message : 'Failed to create collection');
+      setCreateCollError(getErrorMessage(err, 'Failed to create collection'));
     } finally {
       setCreateCollLoading(false);
     }
@@ -379,7 +428,7 @@ export function DatabaseView() {
       setNewFolderName('');
       setNewFolderDesc('');
     } catch (err) {
-      setCreateFolderError(err instanceof Error ? err.message : 'Failed to create folder');
+      setCreateFolderError(getErrorMessage(err, 'Failed to create folder'));
     } finally {
       setCreateFolderLoading(false);
     }
@@ -411,7 +460,7 @@ export function DatabaseView() {
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="Search by title, condition, tags, city, gender, profession, notes..."
+                  placeholder="Search by title, description, condition, tags, city, gender, profession, notes..."
                   value={searchQuery}
                   onChange={e => handleSearchChange(e.target.value)}
                   className="w-full px-5 py-4 pl-12 pr-10 border-2 rounded-xl bg-background shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
@@ -452,113 +501,176 @@ export function DatabaseView() {
                 </div>
               )}
 
-              {/* Advanced Search Toggle */}
-              <div className="flex justify-center mt-4">
-                <button
-                  onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <Filter size={16} />
-                  Advanced Search
-                  {showAdvancedSearch ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                </button>
-              </div>
+              <div className="mt-6 p-4 bg-card border border-border rounded-3xl">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <h3 className="text-base font-semibold">Search filters</h3>
+                    <p className="text-sm text-muted-foreground">Use specific fields for title, description, tags, eye side, gender, age, city, condition, profession, and notes.</p>
+                  </div>
+                  <button
+                    onClick={handleClearSearch}
+                    className="text-sm text-primary hover:text-primary/80"
+                  >
+                    Clear filters
+                  </button>
+                </div>
 
-              {/* Advanced Search Panel */}
-              {showAdvancedSearch && (
-                <div className="mt-4 p-4 bg-card border border-border rounded-lg">
-                  <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                    {/* File Types */}
-                    <div className="col-span-1">
-                      <label className="block text-sm font-medium mb-2">File Types</label>
-                      <div className="space-y-2">
-                        {['Image', 'Video', 'Document'].map(fileType => (
-                          <label key={fileType} className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={advancedFilters.fileTypes.includes(fileType)}
-                              onChange={(e) => {
-                                const newFileTypes = e.target.checked
-                                  ? [...advancedFilters.fileTypes, fileType]
-                                  : advancedFilters.fileTypes.filter(ft => ft !== fileType);
-                                handleAdvancedFilterChange('fileTypes', newFileTypes);
-                              }}
-                              className="w-4 h-4 border border-border rounded accent-primary"
-                            />
-                            <span className="text-sm">{fileType}</span>
-                          </label>
-                        ))}
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Title</label>
+                    <input
+                      type="text"
+                      placeholder="Search by title"
+                      value={advancedFilters.title}
+                      onChange={(e) => handleAdvancedFilterChange('title', e.target.value)}
+                      className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Description</label>
+                    <input
+                      type="text"
+                      placeholder="Search by description"
+                      value={advancedFilters.description}
+                      onChange={(e) => handleAdvancedFilterChange('description', e.target.value)}
+                      className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+
+                  <div className="relative">
+                    <label className="block text-sm font-medium mb-2">Tags</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowTagDropdown(!showTagDropdown)}
+                      className="w-full text-left px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    >
+                      {advancedFilters.selectedTagIds.length > 0
+                        ? tags.filter(tag => advancedFilters.selectedTagIds.includes(tag.id)).map(tag => tag.name).join(', ')
+                        : 'Select tags'}
+                    </button>
+                    {showTagDropdown && (
+                      <div className="absolute z-50 mt-2 w-full max-h-64 overflow-auto rounded-2xl border border-border bg-card p-3 shadow-lg">
+                        <div className="grid grid-cols-2 gap-2">
+                          {tags.map(tag => (
+                            <label key={tag.id} className="flex items-center gap-2 cursor-pointer rounded-lg px-2 py-2 hover:bg-accent/10">
+                              <input
+                                type="checkbox"
+                                checked={advancedFilters.selectedTagIds.includes(tag.id)}
+                                onChange={(e) => {
+                                  const newSelectedTagIds = e.target.checked
+                                    ? [...advancedFilters.selectedTagIds, tag.id]
+                                    : advancedFilters.selectedTagIds.filter(id => id !== tag.id);
+                                  handleAdvancedFilterChange('selectedTagIds', newSelectedTagIds);
+                                }}
+                                className="w-4 h-4 accent-primary"
+                              />
+                              <span className="text-sm">{tag.name}</span>
+                            </label>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
+                  </div>
 
-                    {/* Tags */}
-                    <div className="col-span-1 md:col-span-2 lg:col-span-2 xl:col-span-2">
-                      <label className="block text-sm font-medium mb-2">Tags</label>
-                      <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                        {tags.map(tag => (
-                          <label key={tag.id} className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={advancedFilters.selectedTagIds.includes(tag.id)}
-                              onChange={(e) => {
-                                const newSelectedTagIds = e.target.checked
-                                  ? [...advancedFilters.selectedTagIds, tag.id]
-                                  : advancedFilters.selectedTagIds.filter(id => id !== tag.id);
-                                handleAdvancedFilterChange('selectedTagIds', newSelectedTagIds);
-                              }}
-                              className="w-4 h-4 border border-border rounded accent-primary flex-shrink-0"
-                            />
-                            <span className="text-xs truncate">{tag.name}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Eye Side</label>
+                    <select
+                      value={advancedFilters.eyeSide}
+                      onChange={(e) => handleAdvancedFilterChange('eyeSide', e.target.value)}
+                      className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    >
+                      <option value="">Any</option>
+                      <option value="Left">Left</option>
+                      <option value="Right">Right</option>
+                      <option value="Both">Both</option>
+                    </select>
+                  </div>
 
-                    {/* Contributor Name */}
-                    <div className="col-span-1">
-                      <label className="block text-sm font-medium mb-2">Contributor Name</label>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Gender</label>
+                    <select
+                      value={advancedFilters.gender}
+                      onChange={(e) => handleAdvancedFilterChange('gender', e.target.value)}
+                      className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    >
+                      <option value="">Any</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Min age</label>
                       <input
-                        type="text"
-                        placeholder="Search by name..."
-                        value={advancedFilters.contributorName}
-                        onChange={(e) => handleAdvancedFilterChange('contributorName', e.target.value)}
+                        type="number"
+                        min="0"
+                        placeholder="From"
+                        value={advancedFilters.minAge}
+                        onChange={(e) => handleAdvancedFilterChange('minAge', e.target.value)}
                         className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
                       />
                     </div>
-
-                    {/* Metadata Key */}
-                    <div className="col-span-1">
-                      <label className="block text-sm font-medium mb-2">Metadata Key</label>
-                      <select
-                        value={advancedFilters.metadataKey}
-                        onChange={(e) => handleAdvancedFilterChange('metadataKey', e.target.value)}
-                        className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      >
-                        <option value="">Select key...</option>
-                        <option value="EyeSide">Eye Side</option>
-                        <option value="Gender">Gender</option>
-                        <option value="Age">Age</option>
-                        <option value="City">City</option>
-                        <option value="Status">Status</option>
-                        <option value="Profession">Profession</option>
-                        <option value="Notes">Notes</option>
-                      </select>
-                    </div>
-
-                    {/* Metadata Value */}
-                    <div className="col-span-1">
-                      <label className="block text-sm font-medium mb-2">Metadata Value</label>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Max age</label>
                       <input
-                        type="text"
-                        placeholder="Search value..."
-                        value={advancedFilters.metadataValue}
-                        onChange={(e) => handleAdvancedFilterChange('metadataValue', e.target.value)}
+                        type="number"
+                        min="0"
+                        placeholder="To"
+                        value={advancedFilters.maxAge}
+                        onChange={(e) => handleAdvancedFilterChange('maxAge', e.target.value)}
                         className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
                       />
                     </div>
                   </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">City</label>
+                    <input
+                      type="text"
+                      placeholder="Search by city"
+                      value={advancedFilters.city}
+                      onChange={(e) => handleAdvancedFilterChange('city', e.target.value)}
+                      className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Condition</label>
+                    <input
+                      type="text"
+                      placeholder="Search by condition"
+                      value={advancedFilters.condition}
+                      onChange={(e) => handleAdvancedFilterChange('condition', e.target.value)}
+                      className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Profession</label>
+                    <input
+                      type="text"
+                      placeholder="Search by profession"
+                      value={advancedFilters.profession}
+                      onChange={(e) => handleAdvancedFilterChange('profession', e.target.value)}
+                      className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Notes</label>
+                    <input
+                      type="text"
+                      placeholder="Search by notes"
+                      value={advancedFilters.notes}
+                      onChange={(e) => handleAdvancedFilterChange('notes', e.target.value)}
+                      className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
                 </div>
-              )}
+              </div>
             </div>
           </div>
 
@@ -650,24 +762,6 @@ export function DatabaseView() {
                       {selectedSamples.size === filteredSamples.length ? 'Deselect All' : 'Select All'}
                     </button>
                   )}
-                  <Filter size={14} className="text-muted-foreground" />
-                  <select
-                    value={filterGender}
-                    onChange={e => setFilterGender(e.target.value)}
-                    className="px-3 py-1.5 border border-border rounded-lg bg-card text-sm focus:outline-none"
-                  >
-                    <option value="">All Genders</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                  </select>
-                  <input
-                    type="text"
-                    placeholder="Filter condition..."
-                    value={filterStatus}
-                    onChange={e => setFilterStatus(e.target.value)}
-                    className="px-3 py-1.5 border border-border rounded-lg bg-card text-sm focus:outline-none w-36"
-                  />
                 </div>
               </div>
 

@@ -88,10 +88,17 @@ namespace SarabPlatform.Models
         {
             try
             {
-                var metadata = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
-                if (metadata != null && metadata.TryGetValue(key, out var value))
+                var metadata = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json);
+                if (metadata == null)
+                    return null;
+
+                if (metadata.TryGetValue(key, out var value))
+                    return ConvertJsonElementToString(value);
+
+                foreach (var kvp in metadata)
                 {
-                    return value?.ToString();
+                    if (string.Equals(kvp.Key, key, StringComparison.OrdinalIgnoreCase))
+                        return ConvertJsonElementToString(kvp.Value);
                 }
             }
             catch
@@ -99,6 +106,18 @@ namespace SarabPlatform.Models
             }
 
             return null;
+        }
+
+        private static string? ConvertJsonElementToString(JsonElement element)
+        {
+            return element.ValueKind switch
+            {
+                JsonValueKind.String => element.GetString(),
+                JsonValueKind.Number => element.ToString(),
+                JsonValueKind.True => "True",
+                JsonValueKind.False => "False",
+                _ => element.ToString()
+            };
         }
 
         private static string? NormalizeGender(string? value)

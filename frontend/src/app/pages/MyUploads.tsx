@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchSamples, downloadSample, triggerDownload, type Sample } from '../services/api';
+import { getErrorMessage } from '../services/error';
 import { Upload, Download, File, Loader, AlertCircle, Eye } from 'lucide-react';
 
 export function MyUploads() {
@@ -30,7 +31,7 @@ export function MyUploads() {
       const mine = user ? all.filter(s => s.createdBy === user.id) : all;
       setSamples(mine);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load uploads');
+      setError(getErrorMessage(err, 'Failed to load uploads'));
     } finally {
       setLoading(false);
     }
@@ -150,14 +151,14 @@ export function MyUploads() {
           <div className="border border-border rounded-xl bg-card overflow-hidden">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-border" style={{ backgroundColor: '#f8f7ff' }}>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Title</th>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Files</th>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Condition</th>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Uploaded</th>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Downloads</th>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Views</th>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-muted-foreground">Actions</th>
+                <tr className="border-b border-border" style={{ backgroundColor: '#9481ff' }}>
+                  <th className="px-6 py-3 text-left text-sm font-mediu">Title</th>
+                  <th className="px-6 py-3 text-left text-sm font-medium">Files</th>
+                  <th className="px-6 py-3 text-left text-sm font-medium">Condition</th>
+                  <th className="px-6 py-3 text-left text-sm font-medium">Uploaded</th>
+                  <th className="px-6 py-3 text-left text-sm font-medium">Downloads</th>
+                  <th className="px-6 py-3 text-left text-sm font-medium">Views</th>
+                  <th className="px-6 py-3 text-left text-sm font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -184,7 +185,7 @@ export function MyUploads() {
                       {sample.status ? (
                         <span
                           className="inline-block px-2.5 py-0.5 rounded-md text-xs font-medium"
-                          style={{ backgroundColor: '#f8f7ff', color: '#9481ff', border: '1px solid #b8b8fe' }}
+                          style={{ backgroundColor: '#9481ff', color: '#ffffff', border: '1px solid #b8b8fe' }}
                         >
                           {sample.status}
                         </span>

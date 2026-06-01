@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
+import { getErrorMessage } from '../services/error';
 import { AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 export function SignIn() {
@@ -20,7 +21,7 @@ export function SignIn() {
       await login(email, password);
       navigate('/');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed. Please check your credentials.');
+      setError(getErrorMessage(err, 'Login failed. Please check your credentials.'));
     } finally {
       setLoading(false);
     }
@@ -30,12 +31,11 @@ export function SignIn() {
     <div className="flex-1 flex items-center justify-center p-6 bg-background">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#9481ff' }}>
-            <svg width="32" height="32" viewBox="0 0 20 20" fill="none">
-              <circle cx="10" cy="10" r="7" stroke="white" strokeWidth="1.5" />
-              <circle cx="10" cy="10" r="3" fill="white" />
-            </svg>
-          </div>
+          <img
+            src="/favicon.png"
+            alt="Sarab logo"
+            className="w-16 h-16 rounded-2xl object-cover mx-auto mb-4"
+          />
           <h2 className="mb-2 font-bold" style={{ color: '#9481ff' }}>Welcome to Sarab</h2>
           <p className="text-muted-foreground">Sign in to access the ophthalmology database</p>
         </div>

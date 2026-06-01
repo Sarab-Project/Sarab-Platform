@@ -165,7 +165,7 @@ export function UploadSample() {
       setTimeout(() => navigate('/my-uploads'), 1500);
     } catch (err) {
       clearInterval(progressInterval);
-      setError(err instanceof Error ? err.message : 'Upload failed. Please try again.');
+      setError(getErrorMessage(err, 'Upload failed. Please try again.'));
       setProgress(0);
     } finally {
       setLoading(false);

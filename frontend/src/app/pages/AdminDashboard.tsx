@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
+import { getErrorMessage } from '../services/error';
 import {
   fetchUsers,
   fetchSamples,
@@ -82,7 +83,7 @@ export function AdminDashboard() {
       if (f.status === 'fulfilled') setFolders(f.value);
       if (g.status === 'fulfilled') setGroups(g.value);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load data');
+      setError(getErrorMessage(err, 'Failed to load data'));
     } finally {
       setLoading(false);
     }
@@ -100,7 +101,7 @@ export function AdminDashboard() {
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: editRole } : u));
       setEditingUserId(null);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update role');
+      alert(getErrorMessage(err, 'Failed to update role'));
     } finally {
       setEditLoading(false);
     }
@@ -113,7 +114,7 @@ export function AdminDashboard() {
       await deleteUser(userId);
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, isActive: false } : u));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to deactivate user');
+      alert(getErrorMessage(err, 'Failed to deactivate user'));
     } finally {
       setDeletingUserId(null);
     }
@@ -126,7 +127,7 @@ export function AdminDashboard() {
       await deleteSample(sampleId);
       setSamples(prev => prev.filter(s => s.id !== sampleId));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete sample');
+      alert(getErrorMessage(err, 'Failed to delete sample'));
     } finally {
       setDeletingSampleId(null);
     }
@@ -139,7 +140,7 @@ export function AdminDashboard() {
       await deleteCollection(collectionId);
       setCollections(prev => prev.filter(c => c.id !== collectionId));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete collection');
+      alert(getErrorMessage(err, 'Failed to delete collection'));
     } finally {
       setDeletingCollectionId(null);
     }
@@ -152,7 +153,7 @@ export function AdminDashboard() {
       await deleteFolder(folderId);
       setFolders(prev => prev.filter(f => f.id !== folderId));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete folder');
+      alert(getErrorMessage(err, 'Failed to delete folder'));
     } finally {
       setDeletingFolderId(null);
     }
@@ -165,7 +166,7 @@ export function AdminDashboard() {
       await deleteGroup(groupId);
       setGroups(prev => prev.filter(g => g.id !== groupId));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete group');
+      alert(getErrorMessage(err, 'Failed to delete group'));
     } finally {
       setDeletingGroupId(null);
     }

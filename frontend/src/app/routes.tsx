@@ -2,6 +2,7 @@ import { createBrowserRouter } from 'react-router';
 import { Layout } from './components/Layout';
 import { DatabaseView } from './components/DatabaseView';
 import { SampleDetail } from './pages/SampleDetail';
+import { EditSample } from './pages/EditSample';
 import { SignIn } from './pages/SignIn';
 import { SignUp } from './pages/SignUp';
 import { UploadSample } from './pages/UploadSample';
@@ -25,6 +26,11 @@ export const router = createBrowserRouter([
       { path: 'sample/:id', Component: () => (
         <ProtectedRoute>
           <SampleDetail />
+        </ProtectedRoute>
+      ) },
+      { path: 'sample/:id/edit', Component: () => (
+        <ProtectedRoute>
+          <EditSample />
         </ProtectedRoute>
       ) },
       { path: 'upload', Component: () => (

@@ -1,4 +1,5 @@
 import { getStoredToken } from '../contexts/AuthContext';
+import { extractResponseErrorMessage, safeFetch } from './error';
 
 export const API_BASE_URL = 'http://localhost:5027/api';
 
@@ -128,17 +129,18 @@ export interface UserPublic {
 }
 
 export interface SearchSampleDto {
+  title?: string;
+  description?: string;
+  eyeSide?: string;
   gender?: string;
-  city?: string;
-  status?: string;
   minAge?: number;
   maxAge?: number;
+  city?: string;
+  condition?: string;
+  profession?: string;
+  notes?: string;
   keyword?: string;
   tagIds?: number[];
-  fileTypes?: string[];
-  contributorName?: string;
-  metadataKey?: string;
-  metadataValue?: string;
   page?: number;
   pageSize?: number;
 }
@@ -160,6 +162,21 @@ export interface UploadSampleDto {
   tags?: number[];
   files: File[];
   fileMetadataJson?: string;
+}
+
+export interface UpdateSampleDto {
+  title?: string;
+  description?: string;
+  folderId?: number;
+  eyeSide?: string | null;
+  gender?: string | null;
+  age?: number | null;
+  city?: string | null;
+  status?: string | null;
+  profession?: string | null;
+  notes?: string | null;
+  newFiles?: File[];
+  deletedFiles?: number[];
 }
 
 export interface CreateCollectionDto {
@@ -211,23 +228,7 @@ function getAuthHeaders(isFormData = false): Record<string, string> {
 
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    let errMsg = `HTTP ${res.status}`;
-    try {
-      const contentType = res.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        const body = await res.json();
-        if (body && typeof body === 'object') {
-          errMsg = body?.message || body?.title || body?.detail || Object.values(body.errors || {}).flat().join(', ') || JSON.stringify(body) || errMsg;
-        } else if (typeof body === 'string') {
-          errMsg = body;
-        }
-      } else {
-        const textBody = await res.text();
-        errMsg = textBody || errMsg;
-      }
-    } catch {
-      // no-op
-    }
+    const errMsg = await extractResponseErrorMessage(res);
     throw new Error(errMsg);
   }
   if (res.status === 204) return undefined as T;
@@ -247,7 +248,7 @@ export function parseMetadata(metadataString: string): Record<string, any> {
 // ==================== AUTH API ====================
 
 export async function apiLogin(email: string, password: string) {
-  const res = await fetch(`${API_BASE_URL}/auth/login`, {
+  const res = await safeFetch(`${API_BASE_URL}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -256,7 +257,7 @@ export async function apiLogin(email: string, password: string) {
 }
 
 export async function apiSignup(firstName: string, lastName: string, email: string, password: string, role: 'Researcher' | 'Contributor') {
-  const res = await fetch(`${API_BASE_URL}/auth/signup`, {
+  const res = await safeFetch(`${API_BASE_URL}/auth/signup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ firstName, lastName, email, password, role }),
@@ -267,21 +268,21 @@ export async function apiSignup(firstName: string, lastName: string, email: stri
 // ==================== USERS API ====================
 
 export async function fetchUsers(): Promise<UserPublic[]> {
-  const res = await fetch(`${API_BASE_URL}/users`, {
+  const res = await safeFetch(`${API_BASE_URL}/users`, {
     headers: getAuthHeaders(),
   });
   return handleResponse<UserPublic[]>(res);
 }
 
 export async function fetchUserById(id: number): Promise<UserPublic> {
-  const res = await fetch(`${API_BASE_URL}/users/${id}`, {
+  const res = await safeFetch(`${API_BASE_URL}/users/${id}`, {
     headers: getAuthHeaders(),
   });
   return handleResponse<UserPublic>(res);
 }
 
 export async function updateUser(id: number, dto: UpdateUserDto): Promise<{ message: string }> {
-  const res = await fetch(`${API_BASE_URL}/users/${id}`, {
+  const res = await safeFetch(`${API_BASE_URL}/users/${id}`, {
     method: 'PUT',
     headers: getAuthHeaders(),
     body: JSON.stringify(dto),
@@ -290,7 +291,7 @@ export async function updateUser(id: number, dto: UpdateUserDto): Promise<{ mess
 }
 
 export async function deleteUser(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/users/${id}`, {
+  const res = await safeFetch(`${API_BASE_URL}/users/${id}`, {
     method: 'DELETE',
     headers: getAuthHeaders(),
   });
@@ -298,21 +299,21 @@ export async function deleteUser(id: number): Promise<void> {
 }
 
 export async function fetchSamples(): Promise<Sample[]> {
-  const res = await fetch(`${API_BASE_URL}/samples`, {
+  const res = await safeFetch(`${API_BASE_URL}/samples`, {
     headers: getAuthHeaders(),
   });
   return handleResponse<Sample[]>(res);
 }
 
 export async function fetchSampleById(id: number): Promise<Sample> {
-  const res = await fetch(`${API_BASE_URL}/samples/${id}`, {
+  const res = await safeFetch(`${API_BASE_URL}/samples/${id}`, {
     headers: getAuthHeaders(),
   });
   return handleResponse<Sample>(res);
 }
 
 export async function fetchSampleFileBlob(sampleId: number, fileId: number): Promise<Blob> {
-  const res = await fetch(`${API_BASE_URL}/samples/${sampleId}/files/${fileId}`, {
+  const res = await safeFetch(`${API_BASE_URL}/samples/${sampleId}/files/${fileId}`, {
     headers: getAuthHeaders(),
   });
   if (!res.ok) {
@@ -322,7 +323,7 @@ export async function fetchSampleFileBlob(sampleId: number, fileId: number): Pro
 }
 
 export async function searchSamples(dto: SearchSampleDto): Promise<Sample[]> {
-  const res = await fetch(`${API_BASE_URL}/samples/search`, {
+  const res = await safeFetch(`${API_BASE_URL}/samples/search`, {
     method: 'POST',
     headers: getAuthHeaders(),
     body: JSON.stringify(dto),
@@ -343,7 +344,7 @@ export async function uploadSample(dto: UploadSampleDto): Promise<Sample> {
   }
   dto.files.forEach(file => formData.append('files', file));
 
-  const res = await fetch(`${API_BASE_URL}/samples/upload`, {
+  const res = await safeFetch(`${API_BASE_URL}/samples/upload`, {
     method: 'POST',
     headers: getAuthHeaders(true),
     body: formData,
@@ -351,8 +352,31 @@ export async function uploadSample(dto: UploadSampleDto): Promise<Sample> {
   return handleResponse<Sample>(res);
 }
 
+export async function updateSample(id: number, dto: UpdateSampleDto): Promise<void> {
+  const formData = new FormData();
+  if (dto.title !== undefined) formData.append('title', dto.title);
+  if (dto.description !== undefined) formData.append('description', dto.description);
+  if (dto.folderId !== undefined) formData.append('folderId', dto.folderId.toString());
+  if (dto.eyeSide !== undefined && dto.eyeSide !== null) formData.append('eyeSide', dto.eyeSide);
+  if (dto.gender !== undefined && dto.gender !== null) formData.append('gender', dto.gender);
+  if (dto.age !== undefined && dto.age !== null) formData.append('age', dto.age.toString());
+  if (dto.city !== undefined && dto.city !== null) formData.append('city', dto.city);
+  if (dto.status !== undefined && dto.status !== null) formData.append('status', dto.status);
+  if (dto.profession !== undefined && dto.profession !== null) formData.append('profession', dto.profession);
+  if (dto.notes !== undefined && dto.notes !== null) formData.append('notes', dto.notes);
+  dto.newFiles?.forEach(file => formData.append('newFiles', file));
+  dto.deletedFiles?.forEach(fileId => formData.append('deletedFiles', fileId.toString()));
+
+  const res = await safeFetch(`${API_BASE_URL}/samples/${id}`, {
+    method: 'PUT',
+    headers: getAuthHeaders(true),
+    body: formData,
+  });
+  return handleResponse<void>(res);
+}
+
 export async function deleteSample(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/samples/${id}`, {
+  const res = await safeFetch(`${API_BASE_URL}/samples/${id}`, {
     method: 'DELETE',
     headers: getAuthHeaders(),
   });
@@ -360,35 +384,41 @@ export async function deleteSample(id: number): Promise<void> {
 }
 
 export async function downloadSample(sampleId: number): Promise<Blob> {
-  const res = await fetch(`${API_BASE_URL}/samples/${sampleId}/download`, {
+  const res = await safeFetch(`${API_BASE_URL}/samples/${sampleId}/download`, {
     method: 'POST',
     headers: getAuthHeaders(),
   });
-  if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+  if (!res.ok) {
+    const errMsg = await extractResponseErrorMessage(res);
+    throw new Error(errMsg);
+  }
   return res.blob();
 }
 
 export async function downloadSamples(sampleIds: number[]): Promise<Blob> {
-  const res = await fetch(`${API_BASE_URL}/samples/download`, {
+  const res = await safeFetch(`${API_BASE_URL}/samples/download`, {
     method: 'POST',
     headers: getAuthHeaders(),
     body: JSON.stringify({ sampleIds }),
   });
-  if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+  if (!res.ok) {
+    const errMsg = await extractResponseErrorMessage(res);
+    throw new Error(errMsg);
+  }
   return res.blob();
 }
 
 // ==================== COLLECTIONS API ====================
 
 export async function fetchCollections(): Promise<Collection[]> {
-  const res = await fetch(`${API_BASE_URL}/collections`, {
+  const res = await safeFetch(`${API_BASE_URL}/collections`, {
     headers: getAuthHeaders(),
   });
   return handleResponse<Collection[]>(res);
 }
 
 export async function createCollection(dto: CreateCollectionDto): Promise<Collection> {
-  const res = await fetch(`${API_BASE_URL}/collections`, {
+  const res = await safeFetch(`${API_BASE_URL}/collections`, {
     method: 'POST',
     headers: getAuthHeaders(),
     body: JSON.stringify(dto),
@@ -397,7 +427,7 @@ export async function createCollection(dto: CreateCollectionDto): Promise<Collec
 }
 
 export async function deleteCollection(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/collections/${id}`, {
+  const res = await safeFetch(`${API_BASE_URL}/collections/${id}`, {
     method: 'DELETE',
     headers: getAuthHeaders(),
   });
@@ -407,7 +437,7 @@ export async function deleteCollection(id: number): Promise<void> {
 // ==================== FOLDERS API ====================
 
 export async function fetchFolders(): Promise<Folder[]> {
-  const res = await fetch(`${API_BASE_URL}/folders`, {
+  const res = await safeFetch(`${API_BASE_URL}/folders`, {
     headers: getAuthHeaders(),
   });
   return handleResponse<Folder[]>(res);
@@ -421,7 +451,7 @@ export interface CreateFolderDto {
 }
 
 export async function createFolder(dto: CreateFolderDto): Promise<Folder> {
-  const res = await fetch(`${API_BASE_URL}/folders`, {
+  const res = await safeFetch(`${API_BASE_URL}/folders`, {
     method: 'POST',
     headers: getAuthHeaders(),
     body: JSON.stringify(dto),
@@ -430,7 +460,7 @@ export async function createFolder(dto: CreateFolderDto): Promise<Folder> {
 }
 
 export async function deleteFolder(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/folders/${id}`, {
+  const res = await safeFetch(`${API_BASE_URL}/folders/${id}`, {
     method: 'DELETE',
     headers: getAuthHeaders(),
   });
@@ -440,21 +470,21 @@ export async function deleteFolder(id: number): Promise<void> {
 // ==================== GROUPS API ====================
 
 export async function fetchGroups(): Promise<Group[]> {
-  const res = await fetch(`${API_BASE_URL}/groups`, {
+  const res = await safeFetch(`${API_BASE_URL}/groups`, {
     headers: getAuthHeaders(),
   });
   return handleResponse<Group[]>(res);
 }
 
 export async function fetchGroupById(id: number): Promise<Group> {
-  const res = await fetch(`${API_BASE_URL}/groups/${id}`, {
+  const res = await safeFetch(`${API_BASE_URL}/groups/${id}`, {
     headers: getAuthHeaders(),
   });
   return handleResponse<Group>(res);
 }
 
 export async function createGroup(dto: CreateGroupDto): Promise<Group> {
-  const res = await fetch(`${API_BASE_URL}/groups`, {
+  const res = await safeFetch(`${API_BASE_URL}/groups`, {
     method: 'POST',
     headers: getAuthHeaders(),
     body: JSON.stringify(dto),
@@ -463,7 +493,7 @@ export async function createGroup(dto: CreateGroupDto): Promise<Group> {
 }
 
 export async function deleteGroup(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/groups/${id}`, {
+  const res = await safeFetch(`${API_BASE_URL}/groups/${id}`, {
     method: 'DELETE',
     headers: getAuthHeaders(),
   });
@@ -474,7 +504,7 @@ export async function inviteGroupMembers(
   groupId: number,
   dto: InviteMembersDto
 ): Promise<Group> {
-  const res = await fetch(`${API_BASE_URL}/groups/${groupId}/invite`, {
+  const res = await safeFetch(`${API_BASE_URL}/groups/${groupId}/invite`, {
     method: 'POST',
     headers: getAuthHeaders(),
     body: JSON.stringify(dto),
@@ -487,7 +517,7 @@ export async function changeMemberRole(
   userId: number,
   newRole: number
 ): Promise<{ message: string }> {
-  const res = await fetch(`${API_BASE_URL}/groups/${groupId}/members/${userId}`, {
+  const res = await safeFetch(`${API_BASE_URL}/groups/${groupId}/members/${userId}`, {
     method: 'PUT',
     headers: getAuthHeaders(),
     body: JSON.stringify({ newRole }),
@@ -499,7 +529,7 @@ export async function removeMember(
   groupId: number,
   userId: number
 ): Promise<{ message: string }> {
-  const res = await fetch(`${API_BASE_URL}/groups/${groupId}/members/${userId}`, {
+  const res = await safeFetch(`${API_BASE_URL}/groups/${groupId}/members/${userId}`, {
     method: 'DELETE',
     headers: getAuthHeaders(),
   });
@@ -509,7 +539,7 @@ export async function removeMember(
 export async function leaveGroup(
   groupId: number
 ): Promise<{ message: string }> {
-  const res = await fetch(`${API_BASE_URL}/groups/${groupId}/leave`, {
+  const res = await safeFetch(`${API_BASE_URL}/groups/${groupId}/leave`, {
     method: 'POST',
     headers: getAuthHeaders(),
   });
@@ -519,7 +549,7 @@ export async function leaveGroup(
 // ==================== TAGS API ====================
 
 export async function fetchTags(): Promise<Tag[]> {
-  const res = await fetch(`${API_BASE_URL}/tags`, {
+  const res = await safeFetch(`${API_BASE_URL}/tags`, {
     headers: getAuthHeaders(),
   });
   return handleResponse<Tag[]>(res);

@@ -27,12 +27,7 @@ export function Layout() {
           {/* Logo */}
           <div className="flex items-center gap-8">
             <Link to="/" className="flex items-center gap-2.5">
-              <div className="w-8 h-8 bg-[#9481ff] rounded-lg flex items-center justify-center">
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                  <circle cx="10" cy="10" r="7" stroke="white" strokeWidth="1.5" />
-                  <circle cx="10" cy="10" r="3" fill="white" />
-                </svg>
-              </div>
+              <img src="/favicon.png" alt="Sarab logo" className="w-8 h-8 rounded-lg object-cover" />
               <span className="text-xl tracking-tight font-semibold text-[#9481ff]">Sarab</span>
             </Link>
 

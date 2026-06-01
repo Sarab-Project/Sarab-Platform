@@ -7,8 +7,10 @@ import {
 import {
   fetchSampleById, downloadSample,
   fetchSampleFileBlob, triggerDownload, parseMetadata, fetchUserById,
+  deleteSample,
   type Sample as ApiSample, type ResourceFile, type UserPublic
 } from '../services/api';
+import { getErrorMessage } from '../services/error';
 
 interface FileItem {
   id: number;
@@ -40,6 +42,8 @@ export function SampleDetail() {
 
   const [downloadingAll, setDownloadingAll] = useState(false);
   const [downloadingFileId, setDownloadingFileId] = useState<number | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const selectedResourceFile = sample?.files?.find(f => f.id === selectedFile?.id) ?? null;
   const additionalMetadata = sample
@@ -92,7 +96,7 @@ export function SampleDetail() {
         setFiles(mapped);
         if (mapped.length > 0) setSelectedFile(mapped[0]);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load sample');
+        setError(getErrorMessage(err, 'Failed to load sample'));
       } finally {
         setLoading(false);
       }
@@ -125,6 +129,26 @@ export function SampleDetail() {
       setDownloadingFileId(null);
     }
   };
+
+  const handleDeleteSample = async () => {
+    if (!sample) return;
+    if (!window.confirm('Delete this sample? This will hide it from the database.')) return;
+
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      await deleteSample(sample.id);
+      navigate('/');
+    } catch (err) {
+      setDeleteError(getErrorMessage(err, 'Failed to delete sample.'));
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const canManageSample = Boolean(
+    user && (user.role === 'Admin' || (user.role === 'Contributor' && sample?.createdBy === user.id))
+  );
 
   useEffect(() => {
     let activeUrl: string | null = null;
@@ -266,7 +290,26 @@ export function SampleDetail() {
         <div className="mb-6">
           <div className="flex items-start justify-between gap-4 mb-2">
             <h2 className="text-2xl font-bold">{sample.title}</h2>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {canManageSample && (
+                <>
+                  <button
+                    onClick={() => navigate(`/sample/${sample.id}/edit`)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium hover:opacity-90"
+                    style={{ backgroundColor: '#22c55e' }}
+                  >
+                    Update
+                  </button>
+                  <button
+                    onClick={handleDeleteSample}
+                    disabled={deleteLoading}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium disabled:opacity-60"
+                    style={{ backgroundColor: '#ef4444' }}
+                  >
+                    {deleteLoading ? <Loader size={14} className="animate-spin" /> : 'Delete'}
+                  </button>
+                </>
+              )}
               <button
                 onClick={handleDownloadAll}
                 disabled={downloadingAll}
@@ -278,6 +321,11 @@ export function SampleDetail() {
               </button>
             </div>
           </div>
+          {deleteError && (
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              {deleteError}
+            </div>
+          )}
           <div className="flex flex-wrap gap-4 text-sm text-muted-foreground mb-3">
             {sample.downloadCount !== undefined && (
               <span className="inline-flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1">

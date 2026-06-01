@@ -22,6 +22,8 @@ RUN dotnet publish "Sarab-Platform.csproj" -c $configuration -o /app/publish /p:
 FROM base AS final
 WORKDIR /app
 
+COPY --from=publish /app/publish .
+
 RUN mkdir -p /app/Uploads && chown -R app:app /app/Uploads
 
 USER app

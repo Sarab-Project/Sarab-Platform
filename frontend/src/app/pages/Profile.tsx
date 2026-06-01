@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { updateUser } from '../services/api';
+import { getErrorMessage } from '../services/error';
 import { CheckCircle, AlertCircle, User } from 'lucide-react';
 
 const ROLE_LABELS: Record<number, string> = { 0: 'Admin', 1: 'Contributor', 2: 'Researcher' };
@@ -41,7 +42,7 @@ export function Profile() {
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save changes');
+      setSaveError(getErrorMessage(err, 'Failed to save changes'));
     } finally {
       setSaveLoading(false);
     }
@@ -68,7 +69,7 @@ export function Profile() {
       setConfirmPassword('');
       setTimeout(() => setPwSuccess(false), 3000);
     } catch (err) {
-      setPwError(err instanceof Error ? err.message : 'Failed to update password');
+      setPwError(getErrorMessage(err, 'Failed to update password'));
     } finally {
       setPwLoading(false);
     }
