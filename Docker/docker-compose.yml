@@ -3,17 +3,13 @@ services:
     image: sarab-backend:latest
     container_name: sarab_backend
     ports:
-      # .NET 8 containers default to port 8080. 
-      # Change the left side if you want a different port on your host.
       - "5027:5027" 
     environment:
-      # This automatically overrides the connection string in your appsettings.json!
-      # Notice the double underscore (__). This is how Docker talks to .NET config.
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=Sarab;User Id=sa;Password=!Sarab123;TrustServerCertificate=True;
-      # Tells .NET it's running in development mode (optional, but helpful for Swagger)
       - ASPNETCORE_ENVIRONMENT=Development
     depends_on:
       - sqlserver
+    entrypoint: ["sh", "-c", "sleep 10 && dotnet Sarab-Platform.dll"]
 
   frontend:
     image: sarab-frontend:latest
