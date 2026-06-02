@@ -105,11 +105,13 @@ namespace SarabPlatform.Controllers
                     CreatedAt = f.CreatedAt,
                     UploadedAt = f.UploadedAt
                 }).ToList(),
-                Tags = s.Tags.Select(t => new TagDto
-                {
-                    Id = t.Id,
-                    Name = t.Name
-                }).ToList()
+                Tags = s.Tags != null
+                    ? s.Tags.Select(t => new TagDto
+                    {
+                        Id = t.Id,
+                        Name = t.Name
+                    }).ToList()
+                    : new List<TagDto>()
             });
         }
 
@@ -154,6 +156,27 @@ namespace SarabPlatform.Controllers
                 return true;
 
             return collection.OwnerType == OwnerType.Group && UserIsGroupContributor(currentUserId, collection.OwnerId);
+        }
+
+        private static readonly string[] AllowedFileExtensions =
+        {
+            ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp",
+            ".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv", ".wmv", ".m4v"
+        };
+
+        private static bool IsAllowedFileType(IFormFile file)
+        {
+            if (!string.IsNullOrWhiteSpace(file.ContentType))
+            {
+                if (file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
+                    file.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            var extension = Path.GetExtension(file.FileName);
+            return AllowedFileExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase);
         }
 
         private string GetSampleMetadata(Sample sample)
@@ -503,7 +526,8 @@ namespace SarabPlatform.Controllers
             if (string.IsNullOrWhiteSpace(file.FilePath))
                 return NotFound("File content not found");
 
-            var physicalPath = Path.IsPathRooted(file.FilePath) ? file.FilePath : Path.Combine(_uploadsRoot, file.FilePath);
+            var filePathValue = file.FilePath ?? string.Empty;
+            var physicalPath = Path.IsPathRooted(filePathValue) ? filePathValue : Path.Combine(_uploadsRoot, filePathValue);
             if (!System.IO.File.Exists(physicalPath))
                 return NotFound("File content not found");
 
@@ -729,6 +753,13 @@ namespace SarabPlatform.Controllers
             if (folder == null)
                 return NotFound("Folder Not Found");
 
+            if (dto.Files == null || !dto.Files.Any())
+                return BadRequest("At least one image or video file is required.");
+
+            var invalidCreateFiles = dto.Files.Where(f => !IsAllowedFileType(f)).ToList();
+            if (invalidCreateFiles.Any())
+                return BadRequest("Only image and video files are allowed.");
+
             List<Dictionary<string, object>>? fileMetadataList = null;
             if (!string.IsNullOrWhiteSpace(dto.FileMetadataJson))
             {
@@ -857,6 +888,7 @@ namespace SarabPlatform.Controllers
 
             var sample = await _context.Samples
                 .Include(s => s.Files)
+                .Include(s => s.Tags)
                 .Include(s => s.Folder!).ThenInclude(f => f.Collection!)
                 .FirstOrDefaultAsync(s => s.Id == id && !s.IsDeleted);
 
@@ -865,6 +897,21 @@ namespace SarabPlatform.Controllers
 
             if (!CanManageSample(sample, currentUserId))
                 return Forbid("You are not authorized to update this sample.");
+
+            if (dto.NewFiles != null && dto.NewFiles.Any())
+            {
+                var invalidNewFiles = dto.NewFiles.Where(f => !IsAllowedFileType(f)).ToList();
+                if (invalidNewFiles.Any())
+                    return BadRequest("Only image and video files are allowed.");
+            }
+
+            if (dto.Tags != null && dto.Tags.Any())
+            {
+                var tagIds = dto.Tags.Distinct().ToList();
+                var invalidTags = tagIds.Except(_context.Tags.Select(t => t.Id)).ToList();
+                if (invalidTags.Any())
+                    return BadRequest("One or more selected tags are invalid.");
+            }
 
             Folder? folder = null;
             if (dto.FolderId.HasValue)
@@ -878,6 +925,29 @@ namespace SarabPlatform.Controllers
             else if (sample.FolderId.HasValue)
             {
                 folder = await _context.Folders.FirstOrDefaultAsync(f => f.Id == sample.FolderId.Value && !f.IsDeleted);
+            }
+
+            if (dto.Tags != null || dto.ClearTags == true)
+            {
+                sample.Tags ??= new List<Tag>();
+                var desiredTagIds = dto.Tags?.Distinct().ToList() ?? new List<int>();
+                var existingTagIds = sample.Tags.Select(t => t.Id).ToList();
+
+                var tagsToRemove = sample.Tags.Where(t => !desiredTagIds.Contains(t.Id)).ToList();
+                foreach (var tag in tagsToRemove)
+                {
+                    sample.Tags.Remove(tag);
+                }
+
+                var tagsToAdd = desiredTagIds.Except(existingTagIds).ToList();
+                foreach (var tagId in tagsToAdd)
+                {
+                    var tag = await _context.Tags.FindAsync(tagId);
+                    if (tag != null)
+                    {
+                        sample.Tags.Add(tag);
+                    }
+                }
             }
 
             // Update metadata on the first file
@@ -950,7 +1020,8 @@ namespace SarabPlatform.Controllers
 
                     if (!string.IsNullOrWhiteSpace(file.FilePath))
                     {
-                        var physical = Path.IsPathRooted(file.FilePath) ? file.FilePath : Path.Combine(_uploadsRoot, file.FilePath);
+                        var filePathValue = file.FilePath ?? string.Empty;
+                        var physical = Path.IsPathRooted(filePathValue) ? filePathValue : Path.Combine(_uploadsRoot, filePathValue);
                         if (System.IO.File.Exists(physical))
                         {
                             try { System.IO.File.Delete(physical); } catch { }
@@ -1078,7 +1149,8 @@ namespace SarabPlatform.Controllers
             {
                 foreach (var file in files)
                 {
-                    var physicalPath = Path.IsPathRooted(file.FilePath) ? file.FilePath : Path.Combine(_uploadsRoot, file.FilePath);
+                    var filePathValue = file.FilePath ?? string.Empty;
+                    var physicalPath = Path.IsPathRooted(filePathValue) ? filePathValue : Path.Combine(_uploadsRoot, filePathValue);
                     if(!System.IO.File.Exists(physicalPath))
                         continue;
                     var entry = archive.CreateEntry(file.FileName);
@@ -1139,7 +1211,8 @@ namespace SarabPlatform.Controllers
 
                     foreach (var file in sample.Files ?? new List<ResourceFile>())
                     {
-                        var physicalPath = Path.IsPathRooted(file.FilePath) ? file.FilePath : Path.Combine(_uploadsRoot, file.FilePath);
+                        var filePathValue = file.FilePath ?? string.Empty;
+                        var physicalPath = Path.IsPathRooted(filePathValue) ? filePathValue : Path.Combine(_uploadsRoot, filePathValue);
                         if (!System.IO.File.Exists(physicalPath))
                             continue;
 
@@ -1215,7 +1288,8 @@ namespace SarabPlatform.Controllers
 
                 foreach (var file in sample.Files ?? new List<ResourceFile>())
                 {
-                    var physicalPath = Path.IsPathRooted(file.FilePath) ? file.FilePath : Path.Combine(_uploadsRoot, file.FilePath);
+                    var filePathValue = file.FilePath ?? string.Empty;
+                    var physicalPath = Path.IsPathRooted(filePathValue) ? filePathValue : Path.Combine(_uploadsRoot, filePathValue);
                     if (!System.IO.File.Exists(physicalPath))
                         continue;
 

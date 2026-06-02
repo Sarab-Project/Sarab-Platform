@@ -4,12 +4,15 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   fetchCollections,
   fetchSampleById,
+  fetchTags,
   updateSample,
   type Collection,
   type Sample,
   type ResourceFile,
+  type Tag,
 } from '../services/api';
 import { ArrowLeft, AlertCircle, Loader, UploadCloud, X } from 'lucide-react';
+import { Badge } from '../components/ui/badge';
 import { getErrorMessage } from '../services/error';
 
 export function EditSample() {
@@ -30,6 +33,8 @@ export function EditSample() {
   const [status, setStatus] = useState('');
   const [profession, setProfession] = useState('');
   const [notes, setNotes] = useState('');
+  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [deletedFiles, setDeletedFiles] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,9 +57,10 @@ export function EditSample() {
 
       try {
         const sampleId = parseInt(id || '0');
-        const [sampleData, collectionData] = await Promise.all([
+        const [sampleData, collectionData, tags] = await Promise.all([
           fetchSampleById(sampleId),
           fetchCollections(),
+          fetchTags(),
         ]);
 
         setSample(sampleData);
@@ -69,6 +75,8 @@ export function EditSample() {
         setProfession(sampleData.profession || '');
         setNotes(sampleData.notes || '');
         setCollections(collectionData);
+        setAvailableTags(tags);
+        setSelectedTagIds(sampleData.tags?.map(tag => tag.id) ?? []);
 
         const matchingCollection = collectionData.find(c =>
           c.folders?.some(f => f.id === sampleData.folderId),
@@ -86,10 +94,24 @@ export function EditSample() {
     load();
   }, [id, isAuthenticated, navigate]);
 
+  const isAllowedFileType = (file: File) => {
+    const allowedMime = file.type.startsWith('image/') || file.type.startsWith('video/');
+    const allowedExtension = /\.(jpe?g|png|gif|bmp|webp|mp4|mov|avi|mkv|webm|flv|wmv|m4v)$/i.test(file.name);
+    return allowedMime || allowedExtension;
+  };
+
   const handleNewFiles = (files: FileList | null) => {
     if (!files) return;
     const incoming = Array.from(files);
-    setNewFiles(prev => [...prev, ...incoming]);
+    const allowed = incoming.filter(isAllowedFileType);
+    const rejected = incoming.filter(file => !isAllowedFileType(file));
+
+    if (rejected.length > 0) {
+      setError('Only image and video files are allowed.');
+    }
+
+    if (allowed.length === 0) return;
+    setNewFiles(prev => [...prev, ...allowed]);
   };
 
   const handleRemoveNewFile = (index: number) => {
@@ -127,6 +149,8 @@ export function EditSample() {
         status: status || null,
         profession: profession || null,
         notes: notes || null,
+        tags: selectedTagIds,
+        clearTags: selectedTagIds.length === 0,
         newFiles: newFiles.length > 0 ? newFiles : undefined,
         deletedFiles: deletedFiles.length > 0 ? deletedFiles : undefined,
       });
@@ -248,21 +272,29 @@ export function EditSample() {
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium mb-1.5">Eye Side</label>
-                <input
-                  type="text"
+                <select
                   value={eyeSide}
                   onChange={e => setEyeSide(e.target.value)}
                   className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40"
-                />
+                >
+                  <option value="">Select eye side</option>
+                  <option value="Left">Left</option>
+                  <option value="Right">Right</option>
+                  <option value="Both">Both</option>
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1.5">Gender</label>
-                <input
-                  type="text"
+                <select
                   value={gender}
                   onChange={e => setGender(e.target.value)}
                   className="w-full px-4 py-2.5 border border-border rounded-lg bg-input-background focus:outline-none focus:ring-2 focus:ring-[#9481ff]/40"
-                />
+                >
+                  <option value="">Select gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1.5">Age</label>
@@ -312,19 +344,42 @@ export function EditSample() {
             </div>
           </div>
 
-          {sample.tags?.length > 0 && (
-            <div className="border border-border rounded-xl bg-card p-6">
-              <h3 className="font-semibold mb-4">Tags</h3>
-              <div className="flex flex-wrap gap-2">
-                {sample.tags.map(tag => (
-                  <span key={tag.id} className="rounded-full border border-border bg-muted px-3 py-1 text-sm text-muted-foreground">
-                    {tag.name}
-                  </span>
-                ))}
+          <div className="border border-border rounded-xl bg-card p-6">
+            <h3 className="font-semibold mb-4">Tags</h3>
+            <label className="block text-sm font-medium mb-1.5">Tags</label>
+            {availableTags.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic">No tags available.</p>
+            ) : (
+              <div className="p-3 border border-border rounded-lg bg-input-background">
+                <div className="flex flex-wrap gap-2">
+                  {availableTags.map(tag => {
+                    const isSelected = selectedTagIds.includes(tag.id);
+                    return (
+                      <Badge
+                        key={tag.id}
+                        variant={isSelected ? 'default' : 'outline'}
+                        className={`cursor-pointer transition-all duration-200 hover:scale-105 ${
+                          isSelected
+                            ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                            : 'border-border text-foreground hover:bg-accent hover:text-accent-foreground'
+                        }`}
+                        onClick={() => {
+                          if (isSelected) {
+                            setSelectedTagIds(prev => prev.filter(id => id !== tag.id));
+                          } else {
+                            setSelectedTagIds(prev => [...prev, tag.id]);
+                          }
+                        }}
+                      >
+                        {tag.name}
+                      </Badge>
+                    );
+                  })}
+                </div>
               </div>
-              <p className="mt-3 text-sm text-muted-foreground">Tags are shown as read-only while editing.</p>
-            </div>
-          )}
+            )}
+            <p className="mt-3 text-sm text-muted-foreground">Select one or more predefined tags that describe the sample.</p>
+          </div>
 
           <div className="border border-border rounded-xl bg-card p-6">
             <h3 className="font-semibold mb-4">Files</h3>
@@ -358,6 +413,7 @@ export function EditSample() {
               <input
                 type="file"
                 multiple
+                accept="image/*,video/*"
                 onChange={e => handleNewFiles(e.target.files)}
                 className="block w-full text-sm text-muted-foreground file:mr-4 file:rounded-full file:border-0 file:bg-[#9481ff] file:px-4 file:py-2 file:text-sm file:text-white"
               />

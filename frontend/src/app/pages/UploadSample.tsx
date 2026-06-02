@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchCollections, uploadSample, fetchTags, type Collection, type FileMetadataInput, type Tag } from '../services/api';
 import { UploadCloud, X, File as FileIcon, AlertCircle, CheckCircle, Loader } from 'lucide-react';
+import { getErrorMessage } from '../services/error';
 import { Badge } from '../components/ui/badge';
 
 export function UploadSample() {
@@ -75,12 +76,29 @@ export function UploadSample() {
   const selectedCollection = collections.find(c => c.id.toString() === selectedCollectionId);
   const availableFolders = selectedCollection?.folders || [];
 
+  const isAllowedFileType = (file: File) => {
+    const allowedMime = file.type.startsWith('image/') || file.type.startsWith('video/');
+    const allowedExtension = /\.(jpe?g|png|gif|bmp|webp|mp4|mov|avi|mkv|webm|flv|wmv|m4v)$/i.test(file.name);
+    return allowedMime || allowedExtension;
+  };
+
   const handleFiles = (files: FileList | null) => {
     if (!files) return;
 
     const incomingFiles = Array.from(files);
-    setSelectedFiles(prev => [...prev, ...incomingFiles]);
-    setFileMetadata(prev => [...prev, ...incomingFiles.map(() => ({ }))]);
+    const allowedFiles = incomingFiles.filter(isAllowedFileType);
+    const rejectedFiles = incomingFiles.filter(file => !isAllowedFileType(file));
+
+    if (rejectedFiles.length > 0) {
+      setError('Only image and video files are allowed.');
+    } else {
+      setError('');
+    }
+
+    if (allowedFiles.length === 0) return;
+
+    setSelectedFiles(prev => [...prev, ...allowedFiles]);
+    setFileMetadata(prev => [...prev, ...allowedFiles.map(() => ({ }))]);
     setSelectedFileIndex(prev => (prev === null ? 0 : prev));
   };
 
@@ -377,14 +395,14 @@ export function UploadSample() {
             >
               <UploadCloud size={40} className="mx-auto mb-3 text-[#9481ff] opacity-70" />
               <div className="text-sm font-medium mb-1">Click to upload or drag & drop</div>
-              <div className="text-xs text-muted-foreground">Images, videos, PDFs — max 100MB per file</div>
+              <div className="text-xs text-muted-foreground">Images and videos only — max 100MB per file</div>
               <input
                 ref={fileInputRef}
                 type="file"
                 multiple
                 className="hidden"
                 onChange={e => handleFiles(e.target.files)}
-                accept="image/*,video/*,.pdf,.doc,.docx,.txt"
+                accept="image/*,video/*"
               />
             </div>
 

@@ -11,6 +11,7 @@ import {
   type Sample as ApiSample, type ResourceFile, type UserPublic
 } from '../services/api';
 import { getErrorMessage } from '../services/error';
+import { useAuth } from '../contexts/AuthContext';
 
 interface FileItem {
   id: number;
@@ -33,13 +34,14 @@ export function SampleDetail() {
   const navigate = useNavigate();
 
   const [sample, setSample] = useState<ApiSample | null>(null);
-  const [user, setUser] = useState<UserPublic | null>(null);
+  const [sampleOwner, setSampleOwner] = useState<UserPublic | null>(null);
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
+  const { user: authUser } = useAuth();
   const [downloadingAll, setDownloadingAll] = useState(false);
   const [downloadingFileId, setDownloadingFileId] = useState<number | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -76,14 +78,14 @@ export function SampleDetail() {
         setSample(data);
 
         if (data.createdByUser) {
-          setUser(data.createdByUser);
+          setSampleOwner(data.createdByUser);
         } else {
           try {
             const userData = await fetchUserById(data.createdBy);
-            setUser(userData);
+            setSampleOwner(userData);
           } catch (userErr) {
             console.warn('Failed to load user information:', userErr);
-            setUser(null);
+            setSampleOwner(null);
           }
         }
 
@@ -147,7 +149,7 @@ export function SampleDetail() {
   };
 
   const canManageSample = Boolean(
-    user && (user.role === 0 || sample?.createdBy === user.id)
+    authUser && (authUser.role === 'Admin' || sample?.createdBy === authUser.id)
   );
 
   useEffect(() => {
@@ -342,7 +344,7 @@ export function SampleDetail() {
           </div>
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
             <span>
-              By {user ? `${user.firstName} ${user.lastName}` : 'Unknown user'}
+              By {sampleOwner ? `${sampleOwner.firstName} ${sampleOwner.lastName}` : 'Unknown user'}
             </span>
             <span>•</span>
             <span>{new Date(sample.createdAt).toLocaleDateString()}</span>

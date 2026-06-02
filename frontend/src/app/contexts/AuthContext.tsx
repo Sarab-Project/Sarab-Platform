@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { extractResponseErrorMessage, safeFetch } from '../services/error';
 
-const API_BASE_URL = 'http://localhost:5027/api';
+const API_BASE_URL = 'http://25.19.119.206:5027/api';
 
 export type UserRole = 'Admin' | 'Contributor' | 'Researcher';
 

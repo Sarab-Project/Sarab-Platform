@@ -1,7 +1,7 @@
 import { getStoredToken } from '../contexts/AuthContext';
 import { extractResponseErrorMessage, safeFetch } from './error';
 
-export const API_BASE_URL = 'http://localhost:5027/api';
+export const API_BASE_URL = 'http://25.19.119.206:5027/api';
 
 export interface ResourceFile {
   id: number;
@@ -175,6 +175,8 @@ export interface UpdateSampleDto {
   status?: string | null;
   profession?: string | null;
   notes?: string | null;
+  tags?: number[];
+  clearTags?: boolean;
   newFiles?: File[];
   deletedFiles?: number[];
 }
@@ -364,6 +366,12 @@ export async function updateSample(id: number, dto: UpdateSampleDto): Promise<vo
   if (dto.status !== undefined && dto.status !== null) formData.append('status', dto.status);
   if (dto.profession !== undefined && dto.profession !== null) formData.append('profession', dto.profession);
   if (dto.notes !== undefined && dto.notes !== null) formData.append('notes', dto.notes);
+  if (dto.tags !== undefined) {
+    dto.tags.forEach(tagId => formData.append('tags', tagId.toString()));
+  }
+  if (dto.clearTags) {
+    formData.append('clearTags', 'true');
+  }
   dto.newFiles?.forEach(file => formData.append('newFiles', file));
   dto.deletedFiles?.forEach(fileId => formData.append('deletedFiles', fileId.toString()));
 

@@ -3,11 +3,8 @@ export function About() {
     <div className="flex-1 overflow-auto">
       <div className="mx-auto max-w-4xl px-6 py-12">
         <div className="text-center mb-12">
-          <div className="w-20 h-20 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <svg width="40" height="40" viewBox="0 0 20 20" fill="none">
-              <circle cx="10" cy="10" r="7" stroke="white" strokeWidth="1.5" />
-              <circle cx="10" cy="10" r="3" fill="white" />
-            </svg>
+          <div className="w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6">
+            <img className="w-24 h-24 rounded-lg object-cover" alt="Sarab logo" src="/favicon.png"/>
           </div>
           <h2 className="mb-3" style={{ fontSize: '2rem', color: '#9481ff' }}>Sarab</h2>
           <p className="text-xl text-muted-foreground">Ophthalmology Research Database</p>

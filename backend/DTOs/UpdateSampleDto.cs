@@ -12,6 +12,8 @@ namespace SarabPlatform.Dto
         public string? Status { get; set; }
         public string? Profession { get; set; }
         public string? Notes { get; set; }
+        public List<int>? Tags { get; set; }
+        public bool? ClearTags { get; set; }
         public List<IFormFile>? NewFiles { get; set; }  
         public List<int>? DeletedFiles { get; set; }  
     }

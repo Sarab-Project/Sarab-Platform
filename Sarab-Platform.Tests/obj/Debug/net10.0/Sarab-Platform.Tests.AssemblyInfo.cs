@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Sarab-Platform.Tests")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+9c634c5e9322df657fa06d3ad289d344ef137381")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3ecfbe496c59477c8d0c585cf5d13b5392c090a7")]
 [assembly: System.Reflection.AssemblyProductAttribute("Sarab-Platform.Tests")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Sarab-Platform.Tests")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
