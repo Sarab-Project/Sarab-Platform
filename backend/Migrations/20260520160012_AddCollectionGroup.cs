@@ -4,10 +4,8 @@
 
 namespace Sarab_Platform.Migrations
 {
-    /// <inheritdoc />
     public partial class AddCollectionGroup : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
@@ -40,7 +38,6 @@ namespace Sarab_Platform.Migrations
                 column: "GroupId");
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(

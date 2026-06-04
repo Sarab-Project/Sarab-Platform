@@ -14,7 +14,6 @@ namespace Sarab_Platform.Migrations
     [Migration("20260504201407_UpdatedSeeder")]
     partial class UpdatedSeeder
     {
-        /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618

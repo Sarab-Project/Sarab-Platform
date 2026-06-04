@@ -92,9 +92,7 @@ export function Profile() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Personal Info */}
             <div className="border border-border rounded-xl bg-card p-6">
               <h3 className="mb-5 font-semibold">Personal Information</h3>
               <form onSubmit={handleSave} className="space-y-4">
@@ -165,7 +163,6 @@ export function Profile() {
               </form>
             </div>
 
-            {/* Change Password */}
             <div className="border border-border rounded-xl bg-card p-6">
               <h3 className="mb-5 font-semibold">Change Password</h3>
               <form onSubmit={handlePasswordChange} className="space-y-4">

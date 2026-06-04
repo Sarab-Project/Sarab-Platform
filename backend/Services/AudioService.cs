@@ -28,7 +28,7 @@ namespace SarabPlatform.Services
         catch (Exception ex)
         {
             if (File.Exists(outputFile)) File.Delete(outputFile);
-            throw new Exception($"فشل تحويل الصوت: {ex.Message}");
+            throw new Exception($"Conversion failed: {ex.Message}");
         }
     }
 }

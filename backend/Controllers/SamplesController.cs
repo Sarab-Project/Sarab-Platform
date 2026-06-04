@@ -209,7 +209,6 @@ namespace SarabPlatform.Controllers
     }
     catch (Exception ex)
     {
-        // Added exception safety wrapper matching your individual item endpoint
         return StatusCode(500, new { message = "Internal server error", error = ex.Message });
     }
 }
@@ -472,7 +471,6 @@ namespace SarabPlatform.Controllers
             if (sample.Files != null && sample.Files.Any(f => !string.IsNullOrWhiteSpace(f.FileName) && f.FileName.Contains(value, StringComparison.OrdinalIgnoreCase)))
                 return true;
 
-            // Enhanced file type search
             if (sample.Files != null)
             {
                 if ((value == "image" || value == "images" || value == "photo" || value == "photos" || value == "picture" || value == "pictures") &&
@@ -486,7 +484,6 @@ namespace SarabPlatform.Controllers
                     return true;
             }
 
-            // Contributor name search
             if (sample.CreatedByUser != null)
             {
                 var firstName = sample.CreatedByUser.FirstName ?? string.Empty;
@@ -646,19 +643,19 @@ namespace SarabPlatform.Controllers
                     return Ok(new
                     {
                         sampleId = sample.Id,
-                        message = "تمت المعالجة والتحويل بنجاح.",
+                        message = "Data processed successfully",
                         results = result
                     });
                 }
                 else
                 {
                     var errorMsg = await response.Content.ReadAsStringAsync();
-                    return StatusCode((int)response.StatusCode, new { message = "فشلت خدمة المعالجة في بايثون", details = errorMsg });
+                    return StatusCode((int)response.StatusCode, new { message = "Failed to process data in Python service", details = errorMsg });
                 }
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { message = "خطأ أثناء التواصل مع خدمة الـ AI", error = ex.Message });
+                return StatusCode(500, new { message = "Error occurred while communicating with the AI service", error = ex.Message });
             }
             finally
             {
@@ -675,7 +672,6 @@ namespace SarabPlatform.Controllers
         {
             try
             {
-                // تحديد مسار FFmpeg
                 FFmpeg.SetExecutablesPath("/usr/bin");
                 string cleanBase64 = base64Data.Contains(",") ? base64Data.Split(',')[1] : base64Data;
                 var bytes = Convert.FromBase64String(cleanBase64);
@@ -684,10 +680,8 @@ namespace SarabPlatform.Controllers
 
                 await System.IO.File.WriteAllBytesAsync(mkvPath, bytes);
 
-                // حذف الملف القديم إن وجد
                 if (System.IO.File.Exists(mp4Path)) System.IO.File.Delete(mp4Path);
 
-                // تحويل صريح: hevc/gbrp → h264/yuv420p (متوافق مع جميع الأجهزة)
                 var conversion = FFmpeg.Conversions.New()
                     .AddParameter($"-i \"{mkvPath}\"")
                     .AddParameter("-c:v libx264")
@@ -713,13 +707,13 @@ namespace SarabPlatform.Controllers
 
                 if (System.IO.File.Exists(mkvPath)) System.IO.File.Delete(mkvPath);
 
-                Console.WriteLine($"✅ Converted {fileNameNoExt} — MP4 size: {convertedBytes.Length} bytes");
+                Console.WriteLine($"Converted {fileNameNoExt} — MP4 size: {convertedBytes.Length} bytes");
 
                 return Convert.ToBase64String(convertedBytes);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Conversion Error for {fileNameNoExt}: {ex.Message}");
+                Console.WriteLine($"Conversion Error for {fileNameNoExt}: {ex.Message}");
                 return string.Empty;
             }
         }
@@ -950,7 +944,6 @@ namespace SarabPlatform.Controllers
                 }
             }
 
-            // Update metadata on the first file
             var firstFile = sample.Files?.FirstOrDefault(f => !f.IsDeleted);
             var metadata = new Dictionary<string, object>();
             string? existingMetadataJson = null;

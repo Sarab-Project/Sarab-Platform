@@ -28,7 +28,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Module-level token storage (survives re-renders, lost on page refresh)
 let memoryAccessToken: string | null = null;
 
 function decodeJwt(token: string): Record<string, any> {
@@ -87,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const scheduleRefresh = useCallback((expiresAt: string) => {
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     const expTime = new Date(expiresAt).getTime();
-    const refreshAt = expTime - Date.now() - 5 * 60 * 1000; // 5 min before expiry
+    const refreshAt = expTime - Date.now() - 5 * 60 * 1000; 
     if (refreshAt > 0) {
       refreshTimerRef.current = setTimeout(() => doRefresh(), refreshAt);
     }
@@ -127,7 +126,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [scheduleRefresh]);
 
-  // On mount: try to restore session
   useEffect(() => {
     const storedRefresh = localStorage.getItem('sarab_refresh_token');
     if (storedRefresh) {
@@ -204,7 +202,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
       }
     } catch {
-      // Ignore logout errors
     } finally {
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
       clearSession();
@@ -247,7 +244,6 @@ export function useAuth() {
   return ctx;
 }
 
-// Export for use in api.ts
 export function getStoredToken(): string | null {
   return memoryAccessToken;
 }
