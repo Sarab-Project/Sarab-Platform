@@ -27,7 +27,6 @@ export function MyUploads() {
     setError('');
     try {
       const all = await fetchSamples();
-      // Filter to only show samples created by the current user
       const mine = user ? all.filter(s => s.createdBy === user.id) : all;
       setSamples(mine);
     } catch (err) {
@@ -84,7 +83,6 @@ export function MyUploads() {
           </button>
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
           <div className="border border-border rounded-xl bg-card p-4">
             <div className="text-2xl font-bold mb-0.5" style={{ color: '#9481ff' }}>

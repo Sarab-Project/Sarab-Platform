@@ -21,11 +21,11 @@ builder.Services.AddScoped<FileService>();
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddHttpClient();
 
-// Database configuration
+// Database configuration //
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Authentication setup
+// Authentication setup // 
 var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>()!;
 var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Key));
 

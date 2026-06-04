@@ -33,22 +33,18 @@ export function Groups() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Create group
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDesc, setNewGroupDesc] = useState('');
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState('');
 
-  // Remove member
   const [removingMemberId, setRemovingMemberId] = useState<number | null>(null);
 
-  // Invite member
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState('');
 
-  // Leave / Delete
   const [leaving, setLeaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -199,7 +195,6 @@ export function Groups() {
   return (
     <div className="flex-1 overflow-auto bg-background">
       <div className="mx-auto max-w-6xl px-6 py-8">
-        {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
             {selectedGroup ? (
@@ -242,7 +237,6 @@ export function Groups() {
           </div>
         )}
 
-        {/* Create Group Modal */}
         {showCreateForm && (
           <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
             <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-md shadow-xl">
@@ -303,7 +297,6 @@ export function Groups() {
           </div>
         )}
 
-        {/* Groups List */}
         {!selectedGroup && (
           <>
             {loading && (
@@ -363,7 +356,6 @@ export function Groups() {
           </>
         )}
 
-        {/* Group Detail */}
         {selectedGroup && (
           <div>
             {detailLoading ? (
@@ -469,7 +461,6 @@ export function Groups() {
                   </div>
                 )}
 
-                {/* Group Info */}
                 <div className="border border-border rounded-xl bg-card p-6">
                   <h3 className="font-semibold mb-4">Group Information</h3>
                   <div className="space-y-3 text-sm">

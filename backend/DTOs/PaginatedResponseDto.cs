@@ -1,8 +1,6 @@
 namespace SarabPlatform.Dto
 {
-    /// <summary>
-    /// Generic paginated response for list endpoints
-    /// </summary>
+
     public class PaginatedResponseDto<T>
     {
         public int Total { get; set; }

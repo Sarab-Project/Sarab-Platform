@@ -43,7 +43,6 @@ namespace SarabPlatform.Controllers
         [HttpPost]
         public IActionResult CreateCollectionTemplate([FromBody] CreateCollectionTemplateDto dto)
         {
-            // Check if User exists
             var user = _context.Users.FirstOrDefault(u => u.Id == dto.CreatedBy);
             if (user == null)
             {

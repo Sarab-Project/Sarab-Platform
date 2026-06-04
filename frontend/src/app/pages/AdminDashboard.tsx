@@ -208,7 +208,6 @@ export function AdminDashboard() {
           </div>
         )}
 
-        {/* Tabs */}
         <div className="flex gap-1 mb-6 border-b border-border overflow-x-auto">
           {tabs.map(tab => (
             <button
@@ -235,7 +234,6 @@ export function AdminDashboard() {
 
         {!loading && activeTab === 'overview' && (
           <div className="space-y-6">
-            {/* Stats grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {[
                 { label: 'Total Samples', value: samples.length, icon: <Database size={20} /> },
@@ -254,7 +252,6 @@ export function AdminDashboard() {
               ))}
             </div>
 
-            {/* Recent users */}
             <div className="border border-border rounded-xl bg-card p-6">
               <h3 className="font-semibold mb-4">Recent Users</h3>
               {users.slice(0, 5).map(u => (
@@ -282,7 +279,6 @@ export function AdminDashboard() {
               ))}
             </div>
 
-            {/* Recent samples */}
             <div className="border border-border rounded-xl bg-card p-6">
               <h3 className="font-semibold mb-4">Recent Samples</h3>
               {samples.slice(0, 5).map(s => (

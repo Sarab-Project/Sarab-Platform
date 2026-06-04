@@ -13,7 +13,6 @@ namespace Sarab_Platform.Migrations
     [Migration("20260422180048_InitialCreate")]
     partial class InitialCreate
     {
-        /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618

@@ -14,7 +14,6 @@ namespace Sarab_Platform.Migrations
     [Migration("20260513093828_MoveMetadataToFileAndAddTags")]
     partial class MoveMetadataToFileAndAddTags
     {
-        /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
