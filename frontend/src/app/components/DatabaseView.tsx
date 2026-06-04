@@ -329,11 +329,12 @@ export function DatabaseView() {
     });
   };
 
-  const toggleSelectAll = () => {
-    if (selectedSamples.size === filteredSamples.length) {
+  const toggleSelectAll = (scope?: ApiSample[]) => {
+    const target = scope || filteredSamples;
+    if (selectedSamples.size === target.length) {
       setSelectedSamples(new Set());
     } else {
-      setSelectedSamples(new Set(filteredSamples.map(s => s.id)));
+      setSelectedSamples(new Set(target.map(s => s.id)));
     }
   };
 
@@ -756,7 +757,7 @@ export function DatabaseView() {
                 <div className="flex items-center gap-2">
                   {filteredSamples.length > 0 && (
                     <button
-                      onClick={toggleSelectAll}
+                      onClick={() => toggleSelectAll(filteredSamples)}
                       className="px-3 py-1.5 border border-border rounded-lg text-sm hover:bg-muted transition-colors"
                     >
                       {selectedSamples.size === filteredSamples.length ? 'Deselect All' : 'Select All'}
@@ -986,6 +987,46 @@ export function DatabaseView() {
                 )}
               </div>
 
+              <div className="mb-5 flex flex-wrap items-center gap-3 justify-between">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="text-sm text-muted-foreground font-medium">
+                    {displayedCollectionSamples.length} sample{displayedCollectionSamples.length !== 1 ? 's' : ''}
+                  </span>
+                  {selectedSamples.size > 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-primary">
+                        {selectedSamples.size} selected
+                      </span>
+                      <button
+                        onClick={handleDownloadSelected}
+                        disabled={downloadingAll}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-60 transition-colors"
+                      >
+                        {downloadingAll ? <Loader size={12} className="animate-spin" /> : <Download size={12} />}
+                        Download
+                      </button>
+                      <button
+                        onClick={() => setSelectedSamples(new Set())}
+                        className="px-3 py-1.5 border border-border rounded-lg text-sm hover:bg-muted transition-colors"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {displayedCollectionSamples.length > 0 && (
+                    <button
+                      onClick={() => toggleSelectAll(displayedCollectionSamples)}
+                      className="px-3 py-1.5 border border-border rounded-lg text-sm hover:bg-muted transition-colors"
+                    >
+                      {selectedSamples.size === displayedCollectionSamples.length ? 'Deselect All' : 'Select All'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {displayedCollectionFolders.length === 0 && displayedCollectionSamples.length === 0 ? (
                 <div className="border-2 border-dashed border-border rounded-2xl p-12 text-center">
                   <div className="w-16 h-16 rounded-full mx-auto flex items-center justify-center mb-4 bg-muted text-primary">
@@ -1157,6 +1198,46 @@ export function DatabaseView() {
                     Up
                   </button>
                 )}
+              </div>
+
+              <div className="mb-5 flex flex-wrap items-center gap-3 justify-between">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="text-sm text-muted-foreground font-medium">
+                    {displayedMySamples.length} sample{displayedMySamples.length !== 1 ? 's' : ''}
+                  </span>
+                  {selectedSamples.size > 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-primary">
+                        {selectedSamples.size} selected
+                      </span>
+                      <button
+                        onClick={handleDownloadSelected}
+                        disabled={downloadingAll}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-60 transition-colors"
+                      >
+                        {downloadingAll ? <Loader size={12} className="animate-spin" /> : <Download size={12} />}
+                        Download
+                      </button>
+                      <button
+                        onClick={() => setSelectedSamples(new Set())}
+                        className="px-3 py-1.5 border border-border rounded-lg text-sm hover:bg-muted transition-colors"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {displayedMySamples.length > 0 && (
+                    <button
+                      onClick={() => toggleSelectAll(displayedMySamples)}
+                      className="px-3 py-1.5 border border-border rounded-lg text-sm hover:bg-muted transition-colors"
+                    >
+                      {selectedSamples.size === displayedMySamples.length ? 'Deselect All' : 'Select All'}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {displayedFolders.length === 0 && displayedMySamples.length === 0 ? (
