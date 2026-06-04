@@ -118,7 +118,6 @@ namespace SarabPlatform.Controllers
                 return NotFound();
             }
 
-            // Allow access if collection was explicitly made visible to a group the user is a member of
             if (!IsAdminUser() && collection.VisibleToGroups != null && collection.VisibleToGroups.Any())
             {
                 var canSee = collection.VisibleToGroups.Any(v => v.Group != null && v.Group.Members.Any(m => m.UserId == currentUserId));
@@ -146,14 +145,12 @@ namespace SarabPlatform.Controllers
                 return Unauthorized();
             }
 
-            // Check if User exists
             var user = _context.Users.FirstOrDefault(u => u.Id == currentUserId);
             if (user == null)
             {
                 return BadRequest("User not found.");
             }
 
-            // Check if Owner exists
             Group? group = null;
             if (dto.OwnerType == OwnerType.Group)
             {
@@ -182,7 +179,6 @@ namespace SarabPlatform.Controllers
                 }
             }
 
-            // Check if Template exists when provided
             if (dto.TemplateId > 0)
             {
                 var template = _context.CollectionTemplates.FirstOrDefault(t => t.Id == dto.TemplateId);
@@ -208,7 +204,6 @@ namespace SarabPlatform.Controllers
                 _context.Collections.Add(collection);
                 _context.SaveChanges();
 
-                // Handle allowed groups
                 if (dto.AllowedGroupIds != null && dto.AllowedGroupIds.Count > 0)
                 {
                     foreach (var gid in dto.AllowedGroupIds.Distinct())

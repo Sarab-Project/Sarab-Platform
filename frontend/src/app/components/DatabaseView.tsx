@@ -55,18 +55,14 @@ export function DatabaseView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Selection State
   const [selectedSamples, setSelectedSamples] = useState<Set<number>>(new Set());
   const [downloadingAll, setDownloadingAll] = useState(false);
 
-  // My Collection folder navigation
   const [currentFolderId, setCurrentFolderId] = useState<number | null>(null);
 
-  // Collection browsing state
   const [currentCollectionId, setCurrentCollectionId] = useState<number | null>(null);
   const [currentCollectionFolderId, setCurrentCollectionFolderId] = useState<number | null>(null);
 
-  // Collection creation
   const [showCreateCollection, setShowCreateCollection] = useState(false);
   const [newCollName, setNewCollName] = useState('');
   const [newCollDesc, setNewCollDesc] = useState('');
@@ -75,14 +71,12 @@ export function DatabaseView() {
   const [creatorGroups, setCreatorGroups] = useState<Group[]>([]);
   const [newCollAllowedGroupIds, setNewCollAllowedGroupIds] = useState<number[]>([]);
 
-  // Folder creation
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [newFolderDesc, setNewFolderDesc] = useState('');
   const [createFolderLoading, setCreateFolderLoading] = useState(false);
   const [createFolderError, setCreateFolderError] = useState('');
 
-  // Search debounce
   const [searchTimeout, setSearchTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -112,7 +106,6 @@ export function DatabaseView() {
     }
   }
 
-  // Debounced search
   const handleSearchChange = (query: string) => {
     setSearchQuery(query);
     if (searchTimeout) clearTimeout(searchTimeout);
@@ -136,13 +129,11 @@ export function DatabaseView() {
       fetchSamples()
         .then(all => setSamples(all))
         .catch(() => {
-          // keep current samples on failure
         })
         .finally(() => setIsSearching(false));
       return;
     }
 
-    // Generate suggestions
     const lowerQuery = trimmed.toLowerCase();
     const tagSuggestions = tags
       .filter(tag => tag.name.toLowerCase().includes(lowerQuery))
@@ -181,7 +172,6 @@ export function DatabaseView() {
         const results = await searchSamples(searchDto);
         setSamples(results);
       } catch {
-        // Fallback to local filter
       } finally {
         setIsSearching(false);
       }
@@ -212,7 +202,6 @@ export function DatabaseView() {
       const all = await fetchSamples();
       setSamples(all);
     } catch {
-      // keep current
     } finally {
       setIsSearching(false);
     }
@@ -222,7 +211,6 @@ export function DatabaseView() {
     const newFilters = { ...advancedFilters, [key]: value };
     setAdvancedFilters(newFilters);
 
-    // Trigger search with new filters
     if (searchTimeout) clearTimeout(searchTimeout);
     const timeout = setTimeout(async () => {
       setIsSearching(true);
@@ -245,7 +233,6 @@ export function DatabaseView() {
         const results = await searchSamples(searchDto);
         setSamples(results);
       } catch {
-        // Fallback to local filter
       } finally {
         setIsSearching(false);
       }
@@ -253,7 +240,6 @@ export function DatabaseView() {
     setSearchTimeout(timeout);
   };
 
-  // Local filter on top of API search
   const filteredSamples = useMemo(() => {
     return samples.filter(s => {
       const lowerQuery = searchQuery.toLowerCase();
@@ -283,7 +269,6 @@ export function DatabaseView() {
     });
   }, [samples, searchQuery, advancedFilters]);
 
-  // Folder breadcrumbs
   const currentFolderObj = folders.find(f => f.id === currentFolderId);
   const breadcrumbs = useMemo(() => {
     const crumbs: ApiFolder[] = [];
@@ -301,7 +286,6 @@ export function DatabaseView() {
     s.createdBy === user?.id && s.folderId === currentFolderId
   );
 
-  // Collection browsing
   const currentCollection = collections.find(c => c.id === currentCollectionId);
   const collectionBreadcrumbs = useMemo(() => {
     if (!currentCollection) return [];
@@ -481,7 +465,6 @@ export function DatabaseView() {
                 )}
               </div>
 
-              {/* Suggestions Dropdown */}
               {showSuggestions && suggestions.length > 0 && (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
                   {suggestions.map((suggestion, index) => (
@@ -699,7 +682,6 @@ export function DatabaseView() {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="p-6">
         <div className="max-w-7xl mx-auto">
           {error && (
@@ -722,7 +704,6 @@ export function DatabaseView() {
             </div>
           )}
 
-          {/* ─── FLAT VIEW ─── */}
           {!loading && activeTab === 'flat' && (
             <div className="animate-in fade-in duration-200">
               <div className="mb-5 flex flex-wrap items-center gap-3 justify-between">
@@ -788,7 +769,6 @@ export function DatabaseView() {
             </div>
           )}
 
-          {/* ─── COLLECTIONS ─── */}
           {!loading && activeTab === 'collections' && !currentCollectionId && (
             <div className="animate-in fade-in duration-200">
               <div className="flex items-center justify-between mb-5">
@@ -838,7 +818,6 @@ export function DatabaseView() {
                 </div>
               )}
 
-              {/* Create Collection Modal */}
               {showCreateCollection && (
                 <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
                   <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-md shadow-xl">
@@ -919,7 +898,6 @@ export function DatabaseView() {
             </div>
           )}
 
-          {/* ─── COLLECTION FOLDER VIEW ─── */}
           {!loading && activeTab === 'collections' && currentCollectionId && (
             <div className="animate-in fade-in duration-200">
               <div className="flex items-center justify-between mb-5">
@@ -949,7 +927,6 @@ export function DatabaseView() {
                 </div>
               </div>
 
-              {/* Collection Breadcrumbs */}
               <div className="flex items-center gap-2 text-sm text-muted-foreground mb-5 bg-card border border-border px-4 py-2.5 rounded-xl overflow-x-auto">
                 <button
                   onClick={() => setCurrentCollectionId(null)}
@@ -1040,7 +1017,6 @@ export function DatabaseView() {
                 </div>
               )}
 
-              {/* Create Folder Modal */}
               {showCreateFolder && (
                 <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
                   <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-md shadow-xl">
@@ -1100,7 +1076,6 @@ export function DatabaseView() {
           )}
 
 
-          {/* ─── MY WORKSPACE ─── */}
           {!loading && canViewWorkspace && activeTab === 'my-collection' && (
             <div className="animate-in fade-in duration-200">
               <div className="flex items-center justify-between mb-5">
@@ -1211,7 +1186,6 @@ export function DatabaseView() {
                 </div>
               )}
 
-              {/* Create Folder Modal for My Workspace */}
               {showCreateFolder && activeTab === 'my-collection' && (
                 <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
                   <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-md shadow-xl">
@@ -1304,7 +1278,6 @@ function SampleCard({
       className={`border rounded-xl bg-card p-4 hover:shadow-lg transition-all cursor-pointer flex flex-col relative group
         ${isSelected ? 'border-primary ring-2 ring-primary/15' : 'border-border hover:border-primary/40'}`}
     >
-      {/* Checkbox */}
       <div
         className="absolute top-3 right-3 z-10"
         onClick={e => { e.stopPropagation(); onToggleSelection(); }}
@@ -1322,7 +1295,6 @@ function SampleCard({
       </div>
 
       <div className="flex-1" onClick={onClick}>
-        {/* Title */}
         <div className="flex items-start gap-2 mb-2 pr-7">
           <File size={15} className="text-primary shrink-0 mt-0.5" />
           <h3 className="text-sm font-medium line-clamp-2 leading-snug group-hover:text-primary transition-colors">
@@ -1330,14 +1302,12 @@ function SampleCard({
           </h3>
         </div>
 
-        {/* Type badge */}
         <div className="mb-3">
           <span className="inline-block px-2 py-0.5 rounded text-xs font-medium border border-border bg-muted text-primary">
             {fileTypeBadge}
           </span>
         </div>
 
-        {/* Meta */}
         <div className="space-y-1 text-xs text-muted-foreground">
           {sample.status && <div className="truncate">{sample.status}</div>}
           {sample.age > 0 && <div>Age {sample.age}{sample.gender ? ` · ${sample.gender}` : ''}</div>}
@@ -1353,7 +1323,6 @@ function SampleCard({
           )}
         </div>
 
-        {/* Tags */}
         {sample.tags && sample.tags.length > 0 && (
           <div className="mt-3 pt-3 border-t border-border flex flex-wrap gap-1">
             {sample.tags.slice(0, 3).map(tag => (

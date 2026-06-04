@@ -279,7 +279,6 @@ export function SampleDetail() {
   return (
     <div className="flex-1 bg-background">
       <div className="mx-auto max-w-7xl px-6 py-8">
-        {/* Back */}
         <button
           onClick={() => navigate('/')}
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-[#9481ff] mb-6 transition-colors font-medium"
@@ -288,7 +287,6 @@ export function SampleDetail() {
           Back to Database
         </button>
 
-        {/* Header */}
         <div className="mb-6">
           <div className="flex items-start justify-between gap-4 mb-2">
             <h2 className="text-2xl font-bold">{sample.title}</h2>
@@ -361,7 +359,6 @@ export function SampleDetail() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main preview */}
           <div className="lg:col-span-2 space-y-5">
             <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
               <div className="flex items-center justify-between mb-4">
@@ -390,7 +387,6 @@ export function SampleDetail() {
               {renderPreview()}
             </div>
 
-            {/* Metadata */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="border border-border rounded-xl bg-card p-5 shadow-sm">
                 <h3 className="font-semibold mb-4">File Metadata</h3>
@@ -480,9 +476,7 @@ export function SampleDetail() {
             </div>
           </div>
 
-          {/* Sidebar */}
           <div className="space-y-5">
-            {/* Files */}
             <div className="border border-border rounded-xl bg-card p-5 shadow-sm">
               <h3 className="font-semibold mb-4">Files ({files.length})</h3>
               {files.length === 0 ? (
@@ -524,7 +518,6 @@ export function SampleDetail() {
               )}
             </div>
 
-            {/* Tags */}
             <div className="border border-border rounded-xl bg-card p-5 shadow-sm">
               <h3 className="font-semibold mb-4 flex items-center gap-2">
                 <TagIcon size={16} className="text-[#9481ff]" />

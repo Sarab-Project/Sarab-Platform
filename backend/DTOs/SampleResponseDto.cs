@@ -1,8 +1,6 @@
 namespace SarabPlatform.Dto
 {
-    /// <summary>
-    /// Response DTO for Sample with related data
-    /// </summary>
+ 
     public class SampleResponseDto
     {
         public int Id { get; set; }

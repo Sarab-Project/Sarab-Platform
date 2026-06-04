@@ -14,7 +14,6 @@ namespace Sarab_Platform.Migrations
     [Migration("20260513093908_MigrateDataAndAddTags")]
     partial class MigrateDataAndAddTags
     {
-        /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618

@@ -4,13 +4,10 @@
 
 namespace Sarab_Platform.Migrations
 {
-    /// <inheritdoc />
     public partial class MigrateDataAndAddTags : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // Migrate data: copy metadata from Sample to first file of each sample
             migrationBuilder.Sql(
                 @"UPDATE f SET f.Metadata = s.Metadata
                   FROM Files f
@@ -19,7 +16,6 @@ namespace Sarab_Platform.Migrations
                   AND s.Metadata IS NOT NULL"
             );
 
-            // Insert predefined tags if they don't exist
             migrationBuilder.Sql(
                 @"IF NOT EXISTS (SELECT 1 FROM Tags WHERE Name = 'Sirius')
                   INSERT INTO Tags (Name) VALUES ('Sirius');
@@ -30,7 +26,6 @@ namespace Sarab_Platform.Migrations
             );
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
 

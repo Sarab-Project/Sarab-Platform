@@ -1,5 +1,3 @@
-using SarabPlatform.Enum;
-
 namespace SarabPlatform.Dto
 {
     public class UserPublicDto

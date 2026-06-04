@@ -148,7 +148,6 @@ namespace SarabPlatform.Controllers
                 return Unauthorized();
             }
 
-            // Check if Collection exists
             var collection = _context.Collections.FirstOrDefault(c => c.Id == dto.CollectionId);
             if (collection == null)
             {
@@ -174,7 +173,6 @@ namespace SarabPlatform.Controllers
                 return BadRequest("User not found.");
             }
 
-            // Check if Parent exists if provided
             if (dto.ParentId.HasValue)
             {
                 var parent = _context.Folders.FirstOrDefault(f => f.Id == dto.ParentId.Value && !f.IsDeleted);

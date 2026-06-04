@@ -11,7 +11,6 @@ export function UploadSample() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  // Form fields
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [folderId, setFolderId] = useState('');
@@ -21,16 +20,13 @@ export function UploadSample() {
   const [fileMetadata, setFileMetadata] = useState<FileMetadataInput[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Collections/Folders
   const [collections, setCollections] = useState<Collection[]>([]);
   const [selectedCollectionId, setSelectedCollectionId] = useState('');
   const [collectionsLoading, setCollectionsLoading] = useState(true);
 
-  // Tags
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   const [tagsLoading, setTagsLoading] = useState(true);
 
-  // UI state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -52,7 +48,6 @@ export function UploadSample() {
       .finally(() => setTagsLoading(false));
   }, [isAuthenticated]);
 
-  // Handle URL query params for pre-selection
   useEffect(() => {
     const collectionId = searchParams.get('collectionId');
     const folderIdParam = searchParams.get('folderId');
@@ -148,7 +143,6 @@ export function UploadSample() {
     setLoading(true);
     setProgress(0);
 
-    // Simulate progress
     const progressInterval = setInterval(() => {
       setProgress(p => Math.min(p + 10, 85));
     }, 300);
@@ -249,7 +243,6 @@ export function UploadSample() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Basic Info */}
           <div className="border border-border rounded-xl bg-card p-6">
             <h3 className="font-semibold mb-5">Basic Information</h3>
             <div className="space-y-4">
@@ -322,7 +315,6 @@ export function UploadSample() {
             </div>
           </div>
 
-          {/* Organization */}
           <div className="border border-border rounded-xl bg-card p-6">
             <h3 className="font-semibold mb-5">
               Organization <span className="text-red-500">*</span>
@@ -380,7 +372,6 @@ export function UploadSample() {
             </div>
           </div>
 
-          {/* File Upload */}
           <div className="border border-border rounded-xl bg-card p-6">
             <h3 className="font-semibold mb-5">
               Files <span className="text-red-500">*</span>
@@ -533,7 +524,6 @@ export function UploadSample() {
             )}
           </div>
 
-          {/* Upload Progress */}
           {loading && (
             <div className="border border-border rounded-xl bg-card p-4">
               <div className="flex items-center justify-between mb-2 text-sm">
@@ -549,7 +539,6 @@ export function UploadSample() {
             </div>
           )}
 
-          {/* Actions */}
           <div className="flex gap-3 justify-end">
             <button
               type="button"

@@ -14,7 +14,6 @@ namespace Sarab_Platform.Migrations
     [Migration("20260502095111_FixRelations")]
     partial class FixRelations
     {
-        /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618

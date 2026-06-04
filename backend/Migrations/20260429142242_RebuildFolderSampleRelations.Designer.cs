@@ -14,7 +14,6 @@ namespace Sarab_Platform.Migrations
     [Migration("20260429142242_RebuildFolderSampleRelations")]
     partial class RebuildFolderSampleRelations
     {
-        /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618

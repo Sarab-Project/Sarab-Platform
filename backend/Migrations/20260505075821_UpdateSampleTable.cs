@@ -4,10 +4,8 @@
 
 namespace Sarab_Platform.Migrations
 {
-    /// <inheritdoc />
     public partial class UpdateSampleTable : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AlterColumn<string>(
@@ -38,7 +36,6 @@ namespace Sarab_Platform.Migrations
                 defaultValue: "");
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(

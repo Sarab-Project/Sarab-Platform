@@ -14,7 +14,6 @@ namespace Sarab_Platform.Migrations
     [Migration("20260520160012_AddCollectionGroup")]
     partial class AddCollectionGroup
     {
-        /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618

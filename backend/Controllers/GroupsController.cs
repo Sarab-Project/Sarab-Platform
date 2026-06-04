@@ -222,20 +222,17 @@ namespace SarabPlatform.Controllers
 
             foreach (var member in dto.Members)
             {
-                // Check if user exists
                 var user = _context.Users.FirstOrDefault(u => u.Id == member.UserId);
                 if (user == null)
                 {
                     return BadRequest($"User with ID {member.UserId} not found.");
                 }
 
-                // Prevent adding admins to groups
                 if (user.Role == UserRole.Admin)
                 {
                     return BadRequest($"Cannot add admin users to groups.");
                 }
 
-                // Check if already a member
                 if (_context.GroupMembers.Any(gm => gm.GroupId == groupId && gm.UserId == member.UserId))
                 {
                     continue; 
@@ -319,7 +316,6 @@ namespace SarabPlatform.Controllers
                     return BadRequest($"User with email '{member.Email}' not found.");
                 }
 
-                // Prevent adding admins to groups
                 if (user.Role == UserRole.Admin)
                 {
                     return BadRequest($"Cannot add admin users to groups.");
@@ -386,7 +382,6 @@ namespace SarabPlatform.Controllers
                 return NotFound("Membership not found.");
             }
 
-            // Only admins or group owners can remove members
             if (!IsAdminUser() && !UserIsGroupOwner(currentUserId.Value, groupId))
             {
                 return Forbid();
