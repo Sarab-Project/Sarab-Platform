@@ -1,7 +1,7 @@
 ## Project Workflow
 #### Repository Structure
 * Create a folder named frontend and place your React project inside it.
-* The backend project will be inside the backend folder 
+* The backend project will be inside the backend folder.
 ---
 #### Branching Startegy
 * We have a main branch called main (stable version).
