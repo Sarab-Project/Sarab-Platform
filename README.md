@@ -31,7 +31,7 @@ The system integrates AI-powered services, including Automatic Speech Recognitio
 ### AI Services Integration
 
 * Speech-to-Text (ASR) service integration.
-* Eye Hitmaps service integration.
+* Eye Heatmaps service integration.
 * Eye Slit lamp Tracking videos integration.
 * Communication with external AI servers through REST APIs.
 
@@ -101,7 +101,7 @@ _____________________________________
 ### AI Integration
 
 * Automatic Speech Recognition (ASR)
-* Eye Hitmaps Service
+* Eye Heattmaps Service
 * Eye Slit lamp Tracking videos
 
 ---
