@@ -2,7 +2,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
 WORKDIR /app
 EXPOSE 5027
 
-ENV ASPNETCORE_URLS=http://+:5027
+ENV ASPNETCORE_URLS=http://0.0.0.0:5027
 
 RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
 
